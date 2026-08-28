@@ -3,6 +3,7 @@ mod common;
 mod maintenance;
 mod operation;
 mod provisioning;
+mod settings;
 
 use crate::{Event, State, Transition};
 
@@ -29,7 +30,11 @@ pub fn update(state: State, event: Event) -> Transition {
         Event::PinRejected(id) => auth::pin_rejected(state, id),
         Event::PassphraseProvided(id) => auth::passphrase_provided(state, id),
         Event::PassphraseSkipped(id) => auth::passphrase_skipped(state, id),
-        Event::SessionOpened { auth, session } => auth::session_opened(state, auth, session),
+        Event::SessionOpened {
+            auth,
+            session,
+            wallet,
+        } => auth::session_opened(state, auth, session, wallet),
         Event::LockRequested => auth::lock(state),
         Event::SessionExpired(session) => auth::session_expired(state, session),
         Event::HostDisconnected(host) => auth::host_disconnected(state, host),
@@ -47,6 +52,13 @@ pub fn update(state: State, event: Event) -> Transition {
         Event::OperationCompleted(id) => operation::operation_completed(state, id),
         Event::OperationFailed(id) => operation::operation_failed(state, id),
         Event::OperationCancelled(id) => operation::operation_cancelled(state, id),
+
+        Event::SettingChangeRequested { id, host, change } => {
+            settings::setting_change_requested(state, id, host, change)
+        }
+        Event::SettingChangeConfirmed(id) => settings::setting_change_confirmed(state, id),
+        Event::SettingChangeRejected(id) => settings::setting_change_rejected(state, id),
+        Event::SettingChangePersisted(id) => settings::setting_change_persisted(state, id),
 
         Event::ChangePinRequested { id, host } => {
             maintenance::change_pin_requested(state, id, host)
