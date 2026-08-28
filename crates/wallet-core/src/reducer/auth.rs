@@ -5,11 +5,7 @@ use crate::{
 
 use super::common::{failed_attempts, reject, unlocked_session};
 
-pub(super) fn unlock_requested(
-    state: State,
-    id: crate::AuthId,
-    host: crate::HostId,
-) -> Transition {
+pub(super) fn unlock_requested(state: State, id: crate::AuthId, host: crate::HostId) -> Transition {
     if !matches!(state.lifecycle(), Lifecycle::Provisioned { .. }) {
         return reject(state, RejectReason::NotProvisioned);
     }
