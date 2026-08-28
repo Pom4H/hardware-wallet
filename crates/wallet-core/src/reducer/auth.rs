@@ -44,9 +44,10 @@ pub(super) fn pin_verified(state: State, actual: crate::AuthId) -> Transition {
         return reject(state, RejectReason::CorrelationMismatch);
     }
 
-    let Lifecycle::Provisioned { passphrase } = state.lifecycle() else {
+    let Some(metadata) = state.wallet_metadata() else {
         return reject(state, RejectReason::NotProvisioned);
     };
+    let passphrase = metadata.passphrase;
 
     if passphrase == PassphraseMode::Disabled {
         let auth = AuthState::OpeningSession {
@@ -134,12 +135,10 @@ pub(super) fn passphrase_skipped(state: State, actual: crate::AuthId) -> Transit
     if id != actual {
         return reject(state, RejectReason::CorrelationMismatch);
     }
-    if !matches!(
-        state.lifecycle(),
-        Lifecycle::Provisioned {
-            passphrase: PassphraseMode::Optional
-        }
-    ) {
+    let Some(metadata) = state.wallet_metadata() else {
+        return reject(state, RejectReason::NotProvisioned);
+    };
+    if metadata.passphrase != PassphraseMode::Optional {
         return reject(state, RejectReason::InvalidState);
     }
 
