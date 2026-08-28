@@ -6,6 +6,7 @@ on:
       - .github/workflows/chains.yml
       - crates/chain-api/**
       - crates/crypto-runtime/**
+      - crates/key-lifecycle/**
       - crates/hd-key-backend/**
       - crates/chain-bitcoin/**
       - crates/chain-ethereum/**
@@ -15,6 +16,7 @@ on:
       - .github/workflows/chains.yml
       - crates/chain-api/**
       - crates/crypto-runtime/**
+      - crates/key-lifecycle/**
       - crates/hd-key-backend/**
       - crates/chain-bitcoin/**
       - crates/chain-ethereum/**
@@ -76,14 +78,14 @@ jobs:
       - name: Run chain crate tests
         run: cargo test -p "${{ matrix.package }}"
 
-      - name: Run Bitcoin HD e2e
+      - name: Run Bitcoin lifecycle e2e
         if: matrix.chain == 'bitcoin'
         run: cargo run -p hardware-wallet-chain-bitcoin --example bitcoin_e2e
 
-      - name: Run Ethereum HD e2e
+      - name: Run Ethereum lifecycle e2e
         if: matrix.chain == 'ethereum'
         run: cargo run -p hardware-wallet-chain-ethereum --example ethereum_e2e
 
-      - name: Run Solana HD e2e
+      - name: Run Solana lifecycle e2e
         if: matrix.chain == 'solana'
         run: cargo run -p hardware-wallet-chain-solana --example solana_e2e
