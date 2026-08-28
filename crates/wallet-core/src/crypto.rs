@@ -25,6 +25,7 @@ pub enum HashAlgorithm {
     None,
     Sha256,
     DoubleSha256,
+    Hash160,
     Keccak256,
     Blake2b256,
     Blake2b512,
@@ -54,6 +55,10 @@ pub enum CryptoOperation {
         key: KeyLocator,
         format: PublicKeyFormat,
     },
+    Hash {
+        algorithm: HashAlgorithm,
+        payload: PayloadId,
+    },
     Sign {
         key: KeyLocator,
         scheme: SignatureScheme,
@@ -69,9 +74,10 @@ impl CryptoOperation {
     }
 
     #[must_use]
-    pub const fn key(self) -> KeyLocator {
+    pub const fn key(self) -> Option<KeyLocator> {
         match self {
-            Self::DerivePublicKey { key, .. } | Self::Sign { key, .. } => key,
+            Self::DerivePublicKey { key, .. } | Self::Sign { key, .. } => Some(key),
+            Self::Hash { .. } => None,
         }
     }
 }
