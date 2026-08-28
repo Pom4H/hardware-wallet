@@ -1,0 +1,36 @@
+[workspace]
+
+[package]
+name = "hardware-wallet-browser-demo"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+build = "build.rs"
+
+[features]
+default = []
+firmware = ["dep:cortex-m", "dep:cortex-m-rt", "dep:panic-halt"]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hardware-wallet-browser-demo"
+path = "src/main.rs"
+required-features = ["firmware"]
+test = false
+bench = false
+
+[dependencies]
+hardware-wallet-core = { path = "../../crates/wallet-core" }
+cortex-m = { version = "0.7", optional = true }
+cortex-m-rt = { version = "0.7", optional = true }
+panic-halt = { version = "0.2", optional = true }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "none"
