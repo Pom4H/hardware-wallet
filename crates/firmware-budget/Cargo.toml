@@ -1,0 +1,35 @@
+[package]
+name = "hardware-wallet-firmware-budget"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+build = "build.rs"
+
+[features]
+default = []
+embedded-probe = []
+
+[[bin]]
+name = "hardware-wallet-firmware-budget"
+path = "src/main.rs"
+required-features = ["embedded-probe"]
+test = false
+bench = false
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+hardware-wallet-core = { path = "../wallet-core" }
+hardware-wallet-chain-api = { path = "../chain-api" }
+hardware-wallet-crypto-runtime = { path = "../crypto-runtime" }
+hardware-wallet-key-lifecycle = { path = "../key-lifecycle" }
+hardware-wallet-hd-key-backend = { path = "../hd-key-backend" }
+hardware-wallet-chain-bitcoin = { path = "../chain-bitcoin" }
+hardware-wallet-chain-ethereum = { path = "../chain-ethereum" }
+hardware-wallet-chain-solana = { path = "../chain-solana" }
+
+[lints]
+workspace = true

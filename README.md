@@ -2,193 +2,225 @@
 
 A minimal, auditable, chain-agnostic hardware wallet built in Rust.
 
-The project is a reference device, not a wallet for one specific blockchain. The
-trusted core owns generic wallet behavior — provisioning, authorization, sessions,
-accounts, key locators, user approval, security policy and operation lifecycle — while
-chain-specific parsing, review and cryptographic rules live in isolated modules.
+The project is a reference device, not a wallet for one blockchain. The trusted domain
+owns generic wallet behavior — provisioning, authorization, sessions, accounts, user
+approval, security policy and operation lifecycle — while chain parsing and signing
+rules remain isolated.
 
-> **Status:** the domain, software cryptographic runtime, heap-free HD key backend, and
-> three narrow reference chain flows are implemented and exercised end-to-end in CI.
-> Bitcoin Core, Anvil and Agave fund addresses derived by this repository and validate
-> transactions signed by the same derived keys. The nodes do not hold the wallet-under-
-> test private keys. The project is still experimental and must not be used to protect
-> real funds.
+> **Experimental:** do not use this repository to protect real funds. The domain and
+> software cryptographic path are exercised end-to-end, but production firmware,
+> hardware-backed entropy, secure storage, boot security and a reviewed PCB do not exist
+yet.
 
-## What the core models
+## Implemented path
 
-- create a new wallet and generate key material;
-- recover from mnemonic, Shamir, or a future recovery format;
-- mandatory backup display + verification for newly generated wallets;
-- persistent generated/recovered wallet and backup-verification metadata;
-- PIN setup with durable monotonic retry accounting and optional wipe on exhaustion;
-- reboot-safe restoration that always returns provisioned wallets to a locked state;
-- optional/required passphrase wallets represented by opaque wallet contexts;
-- host- and wallet-context-bound unlock sessions;
-- device-owned trusted-host resolution, pairing and revocation;
-- automatic locking on disconnect/expiry;
-- account identifiers and fixed-capacity hierarchical derivation paths;
-- generic derive/hash/sign crypto operations across multiple schemes;
-- address display, public-key export and account creation operations;
-- transaction, message, typed-data, arbitrary-data and custom chain operations;
-- device-owned review before execution;
-- mandatory physical confirmation for every private-key operation;
-- blind-signing policy (disabled by default);
-- physically confirmed, persist-before-apply security settings;
-- cancellation, request correlation and stale-callback rejection after lock/reboot;
-- PIN change, backup verification and factory reset;
-- runtime failure and tamper handling.
-
-## Architecture
+The repository currently proves this complete software flow:
 
 ```text
-untrusted host request
-        │
-        ▼
-   Device Protocol
-        │
-        ▼
- chain-specific parser
-        │
-        ├── human review
-        └── ReviewPlan
-              │
-              ▼
-      Hardware Wallet Core
-      State + Event -> State + Effect
-              │
-              ▼
-      approved ChainExecution
-              │
-      ┌───────┼────────┐
-      ▼       ▼        ▼
- derive     hash      sign
- pubkey               payload
-      │       │        │
-      └───────┼────────┘
-              ▼
-         Crypto Runtime
-              │
-              ▼
-         HD Key Backend
-              │
-              ▼
-      seed / secure element
+device-owned entropy
+        ↓
+BIP-39 recovery mnemonic
+        ↓
+atomic root-store capability
+        ↓
+optional passphrase wallet context
+        ↓
+BIP-32 secp256k1 / SLIP-0010 Ed25519
+        ↓
+device-owned transaction review
+        ↓
+local signature
+        ↓
+Bitcoin Core / Anvil / Agave validation
 ```
 
-`ChainExecution` is intentionally multi-step. A chain can derive and validate the
-actual wallet public key, hash protocol-specific payloads, and only then request a
-signature. Raw transactions and messages stay outside `wallet-core::State`.
+Bitcoin Core, Anvil and Agave provide clean local networks and funding only. They do not
+hold or use the wallet-under-test private keys.
 
-The core must never contain `if chain == bitcoin` / `if chain == ethereum` branches.
-It never stores seed, PIN, passphrase, private key or raw transaction bytes, and it
-never accepts a host-provided signing digest as trusted input.
+## Domain
 
-## Crypto runtime
-
-`crypto-runtime` executes the generic operations requested by an already-approved
-chain execution. The current `SoftwareKeyBackend` binds one secret to one authorized
-`WalletContextId + KeyTarget`, zeroizes its stored secret on drop, implements secp256k1
-ECDSA, Ed25519, SHA-256, double-SHA256, HASH160, Keccak-256 and SHA-512/256, and fails
-closed for unsupported algorithms or a mismatched wallet/key.
-
-This software backend is for tests, emulation and architecture validation. It is not a
-production secret store.
-
-## HD keys
-
-`hd-key-backend` adds a heap-free seed-to-child-key layer without moving derivation
-rules into the wallet state machine or chain parsers.
-
-- secp256k1 uses BIP-32 with the current `k256` backend;
-- Ed25519 uses hardened-only SLIP-0010 derivation;
-- the master seed, intermediate child secrets and SLIP-0010 chain codes are zeroized;
-- `AccountDescriptor::root` is device-owned account metadata;
-- an untrusted request supplies only a path relative to that root;
-- `WalletContextId` still comes only from the unlocked session;
-- official BIP-32 and SLIP-0010 derivation vectors are CI tests.
-
-The network E2Es currently exercise these complete paths from the same deterministic
-test seed:
-
-```text
-Bitcoin   m/84'/1'/0'/0/0
-Ethereum  m/44'/60'/0'/0/0
-Solana    m/44'/501'/0'/0'
-```
-
-The resulting public keys/addresses are funded by the local node, then the transaction
-is reviewed and signed by the corresponding HD child key. `Pom4H/chain-sandbox`
-provides only local RPC/faucet capabilities for these tests; wallet-under-test signing
-material stays in this repository's runtime.
-
-Still missing from the production key lifecycle are hardware entropy, mnemonic-to-seed
-(BIP-39 or another selected recovery scheme), passphrase-to-wallet seed derivation,
-persistent/secure-element secret storage and hardware-backed zeroization guarantees.
-
-## Validated reference flows
-
-| Chain | Current fully reviewed subset | Local compatibility target |
-| --- | --- | --- |
-| Bitcoin | PSBT v0, 1-in/1-out native P2WPKH, `SIGHASH_ALL`, BIP143 | Bitcoin Core 31.1 regtest |
-| Ethereum | EIP-1559 native ETH transfer, empty calldata/access list | Anvil / Foundry 1.8.0 |
-| Solana | legacy one-signer System Program transfer | Agave 4.2.1 local validator |
-
-Each adapter deliberately rejects transaction classes it cannot yet independently
-parse and explain. See the per-chain `SUPPORTED.md` files for the exact fail-closed
-boundary.
-
-The GitHub `Chain integration` workflow starts disposable local nodes through a pinned
-`Pom4H/chain-sandbox` commit, runs each adapter in a separate job, derives the account,
-executes every requested crypto operation, broadcasts the resulting transaction, and
-verifies acceptance by the local chain. Required CI does not depend on public devnets,
-faucets, third-party RPC credentials, or node-provided signing.
-
-## Workspace
-
-```text
-crates/
-  wallet-core/        no_std lifecycle, auth, keys, policy and operation state machine
-  chain-api/          heap-free parse/review/multi-step execution contract
-  crypto-runtime/     no_std generic crypto executor + software key backend
-  hd-key-backend/     heap-free BIP32 + hardened SLIP-0010 key derivation
-  chain-bitcoin/      strict PSBT/P2WPKH reference adapter
-  chain-ethereum/     strict EIP-1559 native-transfer reference adapter
-  chain-solana/       strict System Program transfer reference adapter
-docs/
-  DOMAIN.md           state machine and invariants
-  KEYS.md             account, derivation and generic cryptographic model
-  SECURITY.md         trust boundaries and fail-closed rules
-```
-
-Bitcoin, Ethereum and Solana are the initial architecture probes because they exercise
-very different UTXO/account/message and ECDSA/Ed25519 models. Additional chains must be
-addable without changing the wallet state machine.
-
-## Core rule
+`wallet-core` is a heap-free deterministic reducer:
 
 ```text
 State + Event -> State + Effect
 ```
 
-The runtime executes effects and feeds results back as events. The same domain logic
-can therefore run in pure tests, a firmware sandbox, co-simulation, and later the real
-board.
+It models:
 
-See [`docs/DOMAIN.md`](docs/DOMAIN.md), [`docs/KEYS.md`](docs/KEYS.md) and
-[`docs/SECURITY.md`](docs/SECURITY.md).
+- create and recover flows;
+- mandatory backup display and verification for generated wallets;
+- PIN setup and durable monotonic retry accounting;
+- optional and required passphrase wallets;
+- host-bound unlock sessions, expiry and disconnect policy;
+- device-owned host trust, pairing and revocation;
+- account identifiers and fixed-capacity derivation paths;
+- address display, public-key export and account creation;
+- transaction, message, typed-data and custom operations;
+- device-owned review and mandatory physical confirmation;
+- blind-signing policy, disabled by default;
+- persist-before-apply security settings;
+- cancellation, request correlation and stale-callback rejection;
+- PIN change, backup verification, reboot, tamper and factory reset.
 
-## Target hardware
+The domain never stores seed, PIN, passphrase, private key or raw transaction bytes.
 
-Initial reference direction:
+## Secret lifecycle
+
+`key-lifecycle` maps onboarding and unlock Effects to secret-bearing operations without
+moving secrets into reducer state.
+
+- 12/15/18/21/24-word BIP-39 wallets;
+- device-owned `EntropySource` capability;
+- staged root that is not installed until `PersistProvisioning` succeeds;
+- retryable failed durable commit;
+- BIP-39 recovery back to the same root;
+- passphrase-derived ephemeral `WalletContext` and 64-byte seed;
+- zeroizing root, passphrase and seed buffers;
+- `RootSecretStore` contract for atomic commit, authenticated reads and durable wipe.
+
+The included memory store and deterministic entropy source are test infrastructure only.
+Production firmware must provide MCU/secure-element implementations.
+
+## Keys and cryptography
+
+The host selects only a relative `KeyTarget`:
+
+```text
+account + relative derivation path + purpose
+```
+
+Only an unlocked reducer state can create `ExecutionContext`, which binds that target to
+the active base or hidden-wallet `WalletContextId`. The host cannot substitute another
+wallet context.
+
+Implemented software backends:
+
+- BIP-32 secp256k1;
+- hardened-only SLIP-0010 Ed25519;
+- compressed/uncompressed/raw/x-only secp256k1 public keys;
+- raw Ed25519 public keys;
+- deterministic low-S secp256k1 ECDSA, including Ethereum recovery id;
+- Ed25519 signatures;
+- SHA-256, double-SHA256, HASH160, Keccak-256 and SHA-512/256.
+
+The software key backend is for tests, emulation and architecture validation. The same
+chain interface is intended to accept a secure-element backend later.
+
+## Chain boundary
+
+A chain adapter owns every chain-specific security decision:
+
+```text
+untrusted request
+      ↓
+parse and validate
+      ↓
+human-readable Review
+      ↓
+wallet-core approval
+      ↓
+ChainExecution
+      ↓
+derive / hash / sign
+```
+
+The core must never grow branches such as `if chain == bitcoin`.
+
+Current deliberately narrow, fail-closed reference flows:
+
+| Chain | Reviewed subset | Local compatibility target |
+| --- | --- | --- |
+| Bitcoin | PSBT v0, one native P2WPKH input/output, `SIGHASH_ALL`, BIP143 | Bitcoin Core 31.1 regtest |
+| Ethereum | EIP-1559 native transfer, empty calldata and access list | Anvil / Foundry 1.8.0 |
+| Solana | legacy one-signer System Program transfer | Agave 4.2.1 validator |
+
+Unsupported transaction classes are rejected rather than blind-signed.
+
+## Deterministic integration tests
+
+`Pom4H/chain-sandbox` starts disposable local networks. Each chain job independently
+runs:
+
+```text
+entropy
+→ BIP-39
+→ persisted root
+→ wallet context
+→ HD child
+→ funded address
+→ parse and review
+→ repository-produced signature
+→ network acceptance
+```
+
+Required CI has no public devnet, faucet, RPC credential or node-provided signing
+dependency.
+
+## Hardware sizing
+
+The exact MCU is intentionally not selected yet. `firmware-budget` links the complete
+trusted software surface as one generic Cortex-M ELF, and
+`.github/workflows/hardware-budget.yml` measures:
+
+- linked Flash image;
+- static RAM;
+- a policy-based single-slot and A/B Flash projection;
+- a provisional RAM class including stack and platform reserves.
+
+It builds both `thumbv7em-none-eabi` and `thumbv8m.main-none-eabi`. The report is evidence
+for selecting an evaluation-board memory class, not a production part number. Final
+selection also requires Firmverse cycle/stack measurements, NodeSpice power/brownout
+results and hardware-in-the-loop confirmation.
+
+See [`docs/HARDWARE_REQUIREMENTS.md`](docs/HARDWARE_REQUIREMENTS.md).
+
+## Workspace
+
+```text
+crates/
+  wallet-core/        lifecycle, auth, policy and operation reducer
+  chain-api/          fixed-capacity review/execution/crypto contract
+  key-lifecycle/      entropy, BIP-39, passphrase contexts and root-store contract
+  crypto-runtime/     generic hash/sign executor and software key backend
+  hd-key-backend/     BIP-32 and hardened SLIP-0010
+  chain-bitcoin/      strict PSBT/P2WPKH adapter
+  chain-ethereum/     strict EIP-1559 native-transfer adapter
+  chain-solana/       strict System Program transfer adapter
+  firmware-budget/    linked Cortex-M resource probe, not product firmware
+
+tools/
+  hardware_budget.py  ELF-to-MCU budget report
+
+docs/
+  DOMAIN.md
+  KEYS.md
+  KEY_LIFECYCLE.md
+  SECURITY.md
+  HARDWARE_REQUIREMENTS.md
+```
+
+## Target device direction
+
+The reference product is still expected to use:
 
 - Cortex-M-class MCU;
 - 128×64 display;
 - two physical buttons;
 - USB device transport;
 - dedicated secure element;
-- USB-powered, battery-free design.
+- USB-only, battery-free power.
 
-The exact MCU and secure-element responsibility are intentionally not frozen yet.
+The MCU and secure element will be selected only after the resource and security
+contracts can be tested against concrete parts. Until then the project must not claim
+that seed or private keys never enter the MCU.
+
+## Documentation
+
+- [`docs/DOMAIN.md`](docs/DOMAIN.md)
+- [`docs/KEYS.md`](docs/KEYS.md)
+- [`docs/KEY_LIFECYCLE.md`](docs/KEY_LIFECYCLE.md)
+- [`docs/SECURITY.md`](docs/SECURITY.md)
+- [`docs/HARDWARE_REQUIREMENTS.md`](docs/HARDWARE_REQUIREMENTS.md)
 
 ## License
 

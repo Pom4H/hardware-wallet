@@ -9,6 +9,7 @@ members = [
     "crates/chain-bitcoin",
     "crates/chain-ethereum",
     "crates/chain-solana",
+    "crates/firmware-budget",
 ]
 
 [workspace.package]
@@ -22,3 +23,14 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = "warn"
 pedantic = "warn"
+
+[profile.firmware]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+debug = 1
+strip = "none"
+panic = "abort"
+overflow-checks = true
+incremental = false

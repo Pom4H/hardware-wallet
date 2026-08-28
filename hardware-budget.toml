@@ -1,0 +1,40 @@
+schema = 1
+
+[memory]
+flash_origin = 0x08000000
+flash_length = 2097152
+ram_origin = 0x20000000
+ram_length = 524288
+
+[limits]
+probe_flash_max_bytes = 393216
+probe_static_ram_max_bytes = 65536
+
+[projection]
+flash_alignment_bytes = 4096
+ram_alignment_bytes = 1024
+flash_margin_percent = 25
+ram_margin_percent = 25
+bootloader_flash_bytes = 32768
+persistent_flash_bytes = 16384
+platform_flash_reserve_bytes = 65536
+future_flash_reserve_bytes = 65536
+firmware_slots = 2
+provisional_stack_bytes = 32768
+interrupt_stack_reserve_bytes = 4096
+platform_static_ram_reserve_bytes = 8192
+transport_buffers_bytes = 8192
+display_framebuffer_bytes = 1024
+storage_scratch_bytes = 4096
+future_ram_reserve_bytes = 8192
+
+[classes]
+flash_kib = [256, 512, 1024, 2048, 4096]
+ram_kib = [32, 64, 96, 128, 192, 256, 384, 512]
+
+[latency_targets]
+boot_to_ready_ms = 250
+transaction_parse_ms = 100
+bip39_context_ms = 1500
+secp256k1_sign_ms = 500
+ed25519_sign_ms = 250

@@ -1,0 +1,95 @@
+name: Hardware budget
+
+on:
+  push:
+    paths:
+      - .github/workflows/hardware-budget.yml
+      - Cargo.toml
+      - hardware-budget.toml
+      - tools/hardware_budget.py
+      - crates/wallet-core/**
+      - crates/chain-api/**
+      - crates/crypto-runtime/**
+      - crates/key-lifecycle/**
+      - crates/hd-key-backend/**
+      - crates/chain-bitcoin/**
+      - crates/chain-ethereum/**
+      - crates/chain-solana/**
+      - crates/firmware-budget/**
+  pull_request:
+    paths:
+      - .github/workflows/hardware-budget.yml
+      - Cargo.toml
+      - hardware-budget.toml
+      - tools/hardware_budget.py
+      - crates/wallet-core/**
+      - crates/chain-api/**
+      - crates/crypto-runtime/**
+      - crates/key-lifecycle/**
+      - crates/hd-key-backend/**
+      - crates/chain-bitcoin/**
+      - crates/chain-ethereum/**
+      - crates/chain-solana/**
+      - crates/firmware-budget/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  budget:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - thumbv7em-none-eabi
+          - thumbv8m.main-none-eabi
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust target and LLVM tools
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: llvm-tools-preview
+
+      - name: Link the complete trusted-core probe
+        run: >-
+          cargo build
+          --profile firmware
+          --target "${{ matrix.target }}"
+          -p hardware-wallet-firmware-budget
+          --features embedded-probe
+
+      - name: Calculate MCU memory requirements
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          host="$(rustc -vV | sed -n 's/^host: //p')"
+          llvm_size="$(rustc --print sysroot)/lib/rustlib/${host}/bin/llvm-size"
+          elf="target/${TARGET}/firmware/hardware-wallet-firmware-budget"
+          output="reports/${TARGET}"
+          test -x "$llvm_size"
+          test -f "$elf"
+          mkdir -p "$output"
+          python3 tools/hardware_budget.py \
+            --config hardware-budget.toml \
+            --elf "$elf" \
+            --llvm-size "$llvm_size" \
+            --target "$TARGET" \
+            --json "$output/budget.json" \
+            --markdown "$output/budget.md"
+          cp "$elf" "$output/probe.elf"
+          cat "$output/budget.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload budget evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-budget-${{ matrix.target }}
+          path: reports/${{ matrix.target }}
+          if-no-files-found: error
