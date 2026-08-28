@@ -1,0 +1,28 @@
+# Copy this file per exact ordering code after verifying the vendor datasheet,
+# reference manual, errata, lifecycle status, package and distributor availability.
+schema = 1
+name = "replace-with-verified-ordering-code"
+architecture = "thumbv8m.main-none-eabi"
+flash_bytes = 1048576
+ram_bytes = 131072
+max_clock_mhz = 100
+
+[capabilities]
+usb_fs_device = true
+device_entropy = true
+independent_watchdog = true
+brownout_reset = true
+production_debug_lock = true
+signed_boot_path = true
+unique_device_identity_path = true
+spi_buses = 2
+gpio_count = 32
+
+trustzone_m = true
+dual_bank_flash = true
+secure_key_storage = false
+mpu = true
+rom_secure_boot = false
+hardware_sha = true
+hardware_aes = true
+usb_rom_bootloader = true

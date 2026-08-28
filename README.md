@@ -2,15 +2,15 @@
 
 A minimal, auditable, chain-agnostic hardware wallet built in Rust.
 
-The project is a reference device, not a wallet for one blockchain. The trusted domain
-owns generic wallet behavior — provisioning, authorization, sessions, accounts, user
-approval, security policy and operation lifecycle — while chain parsing and signing
-rules remain isolated.
+The project is a reference device, not a wallet for one blockchain. The trusted
+domain owns generic wallet behavior — provisioning, authorization, sessions,
+accounts, user approval, security policy and operation lifecycle — while chain
+parsing and signing rules remain isolated.
 
-> **Experimental:** do not use this repository to protect real funds. The domain and
-> software cryptographic path are exercised end-to-end, but production firmware,
-> hardware-backed entropy, secure storage, boot security and a reviewed PCB do not exist
-yet.
+> **Experimental:** do not use this repository to protect real funds. The domain
+> and software cryptographic path are exercised end-to-end, but production
+> firmware, hardware-backed entropy, secure storage, boot security and a reviewed
+> PCB do not exist yet.
 
 ## Implemented path
 
@@ -34,8 +34,8 @@ local signature
 Bitcoin Core / Anvil / Agave validation
 ```
 
-Bitcoin Core, Anvil and Agave provide clean local networks and funding only. They do not
-hold or use the wallet-under-test private keys.
+Bitcoin Core, Anvil and Agave provide clean local networks and funding only.
+They do not hold or use the wallet-under-test private keys.
 
 ## Domain
 
@@ -45,41 +45,31 @@ hold or use the wallet-under-test private keys.
 State + Event -> State + Effect
 ```
 
-It models:
+It models create and recovery, backup verification, PIN policy, passphrase
+wallets, host-bound sessions, trusted-host pairing, account/key locators,
+device-owned review, physical confirmation, settings, cancellation, reboot,
+tamper handling and factory reset.
 
-- create and recover flows;
-- mandatory backup display and verification for generated wallets;
-- PIN setup and durable monotonic retry accounting;
-- optional and required passphrase wallets;
-- host-bound unlock sessions, expiry and disconnect policy;
-- device-owned host trust, pairing and revocation;
-- account identifiers and fixed-capacity derivation paths;
-- address display, public-key export and account creation;
-- transaction, message, typed-data and custom operations;
-- device-owned review and mandatory physical confirmation;
-- blind-signing policy, disabled by default;
-- persist-before-apply security settings;
-- cancellation, request correlation and stale-callback rejection;
-- PIN change, backup verification, reboot, tamper and factory reset.
-
-The domain never stores seed, PIN, passphrase, private key or raw transaction bytes.
+The domain never stores seed, PIN, passphrase, private key or raw transaction
+bytes.
 
 ## Secret lifecycle
 
-`key-lifecycle` maps onboarding and unlock Effects to secret-bearing operations without
-moving secrets into reducer state.
+`key-lifecycle` maps onboarding and unlock Effects to secret-bearing operations
+without moving secrets into reducer state.
 
 - 12/15/18/21/24-word BIP-39 wallets;
-- device-owned `EntropySource` capability;
-- staged root that is not installed until `PersistProvisioning` succeeds;
+- device-owned `EntropySource`;
+- staged roots that are not installed until `PersistProvisioning`;
 - retryable failed durable commit;
 - BIP-39 recovery back to the same root;
 - passphrase-derived ephemeral `WalletContext` and 64-byte seed;
 - zeroizing root, passphrase and seed buffers;
-- `RootSecretStore` contract for atomic commit, authenticated reads and durable wipe.
+- `RootSecretStore` contract for atomic commit, authenticated reads and durable
+  wipe.
 
-The included memory store and deterministic entropy source are test infrastructure only.
-Production firmware must provide MCU/secure-element implementations.
+The included memory store and deterministic entropy source are test
+infrastructure only.
 
 ## Keys and cryptography
 
@@ -89,22 +79,21 @@ The host selects only a relative `KeyTarget`:
 account + relative derivation path + purpose
 ```
 
-Only an unlocked reducer state can create `ExecutionContext`, which binds that target to
-the active base or hidden-wallet `WalletContextId`. The host cannot substitute another
-wallet context.
+Only an unlocked reducer state can create `ExecutionContext`, which binds that
+target to the active base or hidden-wallet `WalletContextId`.
 
 Implemented software backends:
 
 - BIP-32 secp256k1;
 - hardened-only SLIP-0010 Ed25519;
-- compressed/uncompressed/raw/x-only secp256k1 public keys;
+- compressed, uncompressed, raw and x-only secp256k1 public keys;
 - raw Ed25519 public keys;
 - deterministic low-S secp256k1 ECDSA, including Ethereum recovery id;
 - Ed25519 signatures;
 - SHA-256, double-SHA256, HASH160, Keccak-256 and SHA-512/256.
 
-The software key backend is for tests, emulation and architecture validation. The same
-chain interface is intended to accept a secure-element backend later.
+The software key backend is for tests, emulation and architecture validation.
+The same chain interface is intended to accept a secure-element backend later.
 
 ## Chain boundary
 
@@ -126,7 +115,7 @@ derive / hash / sign
 
 The core must never grow branches such as `if chain == bitcoin`.
 
-Current deliberately narrow, fail-closed reference flows:
+Current deliberately narrow, fail-closed flows:
 
 | Chain | Reviewed subset | Local compatibility target |
 | --- | --- | --- |
@@ -138,8 +127,7 @@ Unsupported transaction classes are rejected rather than blind-signed.
 
 ## Deterministic integration tests
 
-`Pom4H/chain-sandbox` starts disposable local networks. Each chain job independently
-runs:
+`Pom4H/chain-sandbox` starts disposable local networks. Each chain job runs:
 
 ```text
 entropy
@@ -153,26 +141,45 @@ entropy
 → network acceptance
 ```
 
-Required CI has no public devnet, faucet, RPC credential or node-provided signing
-dependency.
+Required CI has no public devnet, faucet, RPC credential or node-provided
+signing dependency.
 
-## Hardware sizing
+## Measured hardware class
 
-The exact MCU is intentionally not selected yet. `firmware-budget` links the complete
-trusted software surface as one generic Cortex-M ELF, and
-`.github/workflows/hardware-budget.yml` measures:
+`firmware-budget` links the full trusted software surface as one Cortex-M ELF.
+The current baseline is:
 
-- linked Flash image;
-- static RAM;
-- a policy-based single-slot and A/B Flash projection;
-- a provisional RAM class including stack and platform reserves.
+| Target profile | Linked trusted-core Flash | A/B projection | RAM projection |
+| --- | ---: | ---: | ---: |
+| Cortex-M4/M7 | 226.4 KiB | 936 KiB | 82 KiB |
+| Cortex-M33 | 227.4 KiB | 944 KiB | 82 KiB |
 
-It builds both `thumbv7em-none-eabi` and `thumbv8m.main-none-eabi`. The report is evidence
-for selecting an evaluation-board memory class, not a production part number. Final
-selection also requires Firmverse cycle/stack measurements, NodeSpice power/brownout
-results and hardware-in-the-loop confirmation.
+The practical selection floor is therefore:
 
-See [`docs/HARDWARE_REQUIREMENTS.md`](docs/HARDWARE_REQUIREMENTS.md).
+```text
+production with rollback-safe A/B update:
+  Flash >= 1 MiB
+  RAM   >= 128 KiB
+
+single-slot prototype:
+  Flash >= 512 KiB
+  RAM   >= 128 KiB
+```
+
+The RAM floor deliberately exceeds the current 96 KiB calculated class because
+peak stack, interrupt nesting, USB and secure-element driver state have not yet
+been measured. Clock frequency is not guessed from host benchmarks; Firmverse
+or evaluation-board cycle counts will determine it.
+
+`hardware-budget.toml` holds the reviewed margins and reserves.
+`mcu-requirements.toml` holds hard peripheral/security requirements.
+`tools/mcu_candidate.py` checks manually verified candidate descriptions against
+both the generated budget and those requirements.
+
+See:
+
+- [`docs/HARDWARE_BASELINE.md`](docs/HARDWARE_BASELINE.md)
+- [`docs/HARDWARE_REQUIREMENTS.md`](docs/HARDWARE_REQUIREMENTS.md)
 
 ## Workspace
 
@@ -189,14 +196,8 @@ crates/
   firmware-budget/    linked Cortex-M resource probe, not product firmware
 
 tools/
-  hardware_budget.py  ELF-to-MCU budget report
-
-docs/
-  DOMAIN.md
-  KEYS.md
-  KEY_LIFECYCLE.md
-  SECURITY.md
-  HARDWARE_REQUIREMENTS.md
+  hardware_budget.py  ELF-to-MCU memory projection
+  mcu_candidate.py    hard-requirement check and preferred-feature score
 ```
 
 ## Target device direction
@@ -210,9 +211,9 @@ The reference product is still expected to use:
 - dedicated secure element;
 - USB-only, battery-free power.
 
-The MCU and secure element will be selected only after the resource and security
-contracts can be tested against concrete parts. Until then the project must not claim
-that seed or private keys never enter the MCU.
+The MCU and secure element will be selected only after resource, timing, power
+and security contracts are tested against concrete parts. Until then the
+project must not claim that seed or private keys never enter the MCU.
 
 ## Documentation
 
@@ -220,6 +221,7 @@ that seed or private keys never enter the MCU.
 - [`docs/KEYS.md`](docs/KEYS.md)
 - [`docs/KEY_LIFECYCLE.md`](docs/KEY_LIFECYCLE.md)
 - [`docs/SECURITY.md`](docs/SECURITY.md)
+- [`docs/HARDWARE_BASELINE.md`](docs/HARDWARE_BASELINE.md)
 - [`docs/HARDWARE_REQUIREMENTS.md`](docs/HARDWARE_REQUIREMENTS.md)
 
 ## License

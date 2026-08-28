@@ -26,6 +26,7 @@ class Budget:
     target: str
     probe_flash_bytes: int
     probe_static_ram_bytes: int
+    probe_flash_min_bytes: int
     probe_flash_limit_bytes: int
     probe_static_ram_limit_bytes: int
     firmware_slot_bytes: int
@@ -75,6 +76,8 @@ def align_up(value: int, alignment: int) -> int:
 
 
 def with_margin(value: int, percent: int) -> int:
+    if percent < 0:
+        raise ValueError("margin percent cannot be negative")
     return math.ceil(value * (100 + percent) / 100)
 
 
@@ -108,7 +111,7 @@ def classify_sections(sections: list[Section], config: dict) -> tuple[int, int]:
             if section.name == ".data" or section.name.startswith(".data."):
                 data_load_image += section.size
 
-    # Initialized RAM is present both in RAM at runtime and in the flash load image.
+    # Initialized RAM is present both in RAM at runtime and in the Flash load image.
     return flash + data_load_image, static_ram
 
 
@@ -158,13 +161,16 @@ def calculate(target: str, sections: list[Section], config: dict) -> Budget:
         target=target,
         probe_flash_bytes=probe_flash,
         probe_static_ram_bytes=probe_static_ram,
+        probe_flash_min_bytes=int(limits["probe_flash_min_bytes"]),
         probe_flash_limit_bytes=int(limits["probe_flash_max_bytes"]),
         probe_static_ram_limit_bytes=int(limits["probe_static_ram_max_bytes"]),
         firmware_slot_bytes=firmware_slot,
         single_slot_flash_required_bytes=single_slot_flash,
         ab_flash_required_bytes=ab_flash,
         ram_required_bytes=required_ram,
-        recommended_single_slot_flash_kib=next_class(single_slot_flash, classes["flash_kib"]),
+        recommended_single_slot_flash_kib=next_class(
+            single_slot_flash, classes["flash_kib"]
+        ),
         recommended_ab_flash_kib=next_class(ab_flash, classes["flash_kib"]),
         recommended_ram_kib=next_class(required_ram, classes["ram_kib"]),
         stack_bytes_status=(
@@ -172,6 +178,20 @@ def calculate(target: str, sections: list[Section], config: dict) -> Budget:
             "Firmverse/HIL high-water measurement"
         ),
     )
+
+
+def validation_errors(budget: Budget) -> list[str]:
+    errors: list[str] = []
+    if budget.probe_flash_bytes < budget.probe_flash_min_bytes:
+        errors.append(
+            "probe Flash is below the sanity floor; the ELF was probably not linked "
+            "into the configured Flash address range"
+        )
+    if budget.probe_flash_bytes > budget.probe_flash_limit_bytes:
+        errors.append("probe Flash exceeds CI ceiling")
+    if budget.probe_static_ram_bytes > budget.probe_static_ram_limit_bytes:
+        errors.append("probe static RAM exceeds CI ceiling")
+    return errors
 
 
 def render_markdown(budget: Budget, config: dict, sections: list[Section]) -> str:
@@ -197,32 +217,67 @@ def render_markdown(budget: Budget, config: dict, sections: list[Section]) -> st
         "",
         "## Measured linked probe",
         "",
-        "| Metric | Value | CI ceiling |",
+        "| Metric | Value | CI window |",
         "| --- | ---: | ---: |",
-        f"| Flash image | {kib(budget.probe_flash_bytes)} | {kib(budget.probe_flash_limit_bytes)} |",
-        f"| Static RAM (`.data + .bss + .uninit`) | {kib(budget.probe_static_ram_bytes)} | {kib(budget.probe_static_ram_limit_bytes)} |",
+        (
+            f"| Flash image | {kib(budget.probe_flash_bytes)} | "
+            f"{kib(budget.probe_flash_min_bytes)}–{kib(budget.probe_flash_limit_bytes)} |"
+        ),
+        (
+            "| Static RAM (`.data + .bss + .uninit`) | "
+            f"{kib(budget.probe_static_ram_bytes)} | "
+            f"0–{kib(budget.probe_static_ram_limit_bytes)} |"
+        ),
         "",
-        "The probe links the domain, BIP-39 lifecycle, BIP-32/SLIP-0010, both signing backends, and all three chain adapters. It deliberately excludes the not-yet-written USB, display, bootloader, board HAL, secure-element driver, and production storage implementation.",
+        (
+            "The probe links the domain, BIP-39 lifecycle, BIP-32/SLIP-0010, "
+            "both signing backends, and all three chain adapters. It deliberately "
+            "excludes the not-yet-written USB, display, bootloader, board HAL, "
+            "secure-element driver, and production storage implementation."
+        ),
         "",
         "## Projected chip-selection floor",
         "",
         "| Configuration | Calculated requirement | Next normal MCU class |",
         "| --- | ---: | ---: |",
-        f"| Single firmware slot | {kib(budget.single_slot_flash_required_bytes)} Flash | {budget.recommended_single_slot_flash_kib} KiB Flash |",
-        f"| A/B rollback-safe update | {kib(budget.ab_flash_required_bytes)} Flash | {budget.recommended_ab_flash_kib} KiB Flash |",
-        f"| Runtime memory | {kib(budget.ram_required_bytes)} RAM | {budget.recommended_ram_kib} KiB RAM |",
+        (
+            f"| Single firmware slot | "
+            f"{kib(budget.single_slot_flash_required_bytes)} Flash | "
+            f"{budget.recommended_single_slot_flash_kib} KiB Flash |"
+        ),
+        (
+            f"| A/B rollback-safe update | {kib(budget.ab_flash_required_bytes)} Flash | "
+            f"{budget.recommended_ab_flash_kib} KiB Flash |"
+        ),
+        (
+            f"| Runtime memory | {kib(budget.ram_required_bytes)} RAM | "
+            f"{budget.recommended_ram_kib} KiB RAM |"
+        ),
         "",
         f"Stack allowance: **{budget.stack_bytes_status}**.",
         "",
         "## Latency acceptance targets",
         "",
         f"- boot to ready: {latency['boot_to_ready_ms']} ms",
-        f"- parse and prepare a transaction review: {latency['transaction_parse_ms']} ms",
-        f"- open a BIP-39/passphrase context: {latency['bip39_context_ms']} ms",
-        f"- derive and sign with secp256k1: {latency['secp256k1_sign_ms']} ms",
+        (
+            "- parse and prepare a transaction review: "
+            f"{latency['transaction_parse_ms']} ms"
+        ),
+        (
+            "- open a BIP-39/passphrase context: "
+            f"{latency['bip39_context_ms']} ms"
+        ),
+        (
+            "- derive and sign with secp256k1: "
+            f"{latency['secp256k1_sign_ms']} ms"
+        ),
         f"- derive and sign with Ed25519: {latency['ed25519_sign_ms']} ms",
         "",
-        "Clock frequency is not inferred from host timing. Firmverse or hardware must measure target cycles; required MHz is `ceil(worst_case_cycles / latency_budget_us)`.",
+        (
+            "Clock frequency is not inferred from host timing. Firmverse or hardware "
+            "must measure target cycles; required MHz is "
+            "`ceil(worst_case_cycles / latency_budget_us)`."
+        ),
         "",
         "## Largest ELF sections",
         "",
@@ -274,19 +329,17 @@ def main() -> int:
 
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
-    args.json.write_text(json.dumps(asdict(budget), indent=2) + "\n", encoding="utf-8")
+    args.json.write_text(
+        json.dumps(asdict(budget), indent=2) + "\n", encoding="utf-8"
+    )
     report = render_markdown(budget, config, sections)
     args.markdown.write_text(report, encoding="utf-8")
     print(report)
 
-    failed = False
-    if budget.probe_flash_bytes > budget.probe_flash_limit_bytes:
-        print("probe Flash exceeds CI ceiling", file=sys.stderr)
-        failed = True
-    if budget.probe_static_ram_bytes > budget.probe_static_ram_limit_bytes:
-        print("probe static RAM exceeds CI ceiling", file=sys.stderr)
-        failed = True
-    return 1 if failed else 0
+    errors = validation_errors(budget)
+    for error in errors:
+        print(error, file=sys.stderr)
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

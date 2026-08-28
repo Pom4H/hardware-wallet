@@ -9,8 +9,11 @@ ram_origin = 0x20000000
 ram_length = 524288
 
 [limits]
-probe_flash_max_bytes = 393216
-probe_static_ram_max_bytes = 65536
+# Reject a falsely linked ELF whose sections never entered the configured Flash map.
+probe_flash_min_bytes = 65536
+# Current baseline is ~227 KiB. Growth beyond 256 KiB requires an explicit review.
+probe_flash_max_bytes = 262144
+probe_static_ram_max_bytes = 16384
 
 [projection]
 flash_alignment_bytes = 4096

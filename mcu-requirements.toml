@@ -1,0 +1,39 @@
+# Hard constraints and weighted preferences for the reference device.
+# Memory floors are combined with the generated target budget; the stricter value wins.
+schema = 1
+
+[selection]
+flash_mode = "ab"
+flash_floor_bytes = 1048576
+ram_floor_bytes = 131072
+# Set only after target-cycle measurements exist.
+min_clock_mhz = 0
+
+[required]
+architectures = [
+    "thumbv7em-none-eabi",
+    "thumbv8m.main-none-eabi",
+]
+boolean_capabilities = [
+    "usb_fs_device",
+    "device_entropy",
+    "independent_watchdog",
+    "brownout_reset",
+    "production_debug_lock",
+    "signed_boot_path",
+    "unique_device_identity_path",
+]
+
+[required.minimum_counts]
+spi_buses = 1
+gpio_count = 8
+
+[preferred.weights]
+trustzone_m = 3
+dual_bank_flash = 3
+secure_key_storage = 3
+mpu = 2
+rom_secure_boot = 2
+hardware_sha = 1
+hardware_aes = 1
+usb_rom_bootloader = 1
