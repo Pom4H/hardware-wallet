@@ -5,8 +5,8 @@ use core::hint::black_box;
 
 use cortex_m_rt::entry;
 use hardware_wallet_chain_api::{
-    BoundedBytes, ChainExecution, ChainModule, CryptoOperation, HashAlgorithm, PayloadId,
-    PublicKeyFormat,
+    BoundedBytes, ChainExecution, ChainModule, CryptoOperation, CryptoOutput, HashAlgorithm,
+    PayloadId, PublicKeyFormat,
 };
 use hardware_wallet_chain_bitcoin::{Bitcoin, MAX_PSBT_BYTES, Request as BitcoinRequest};
 use hardware_wallet_chain_ethereum::{
@@ -134,12 +134,164 @@ impl Drop for ProbeStore {
 #[entry]
 fn main() -> ! {
     let selector = black_box(0x5a_u8);
-    let result = exercise(selector);
-    black_box(result);
+
+    #[cfg(feature = "firmverse-probe")]
+    let success = firmverse_self_test(selector);
+
+    #[cfg(not(feature = "firmverse-probe"))]
+    {
+        let result = exercise(selector);
+        black_box(result);
+    }
+
+    #[cfg(feature = "firmverse-probe")]
+    cortex_m_semihosting::debug::exit(if success {
+        cortex_m_semihosting::debug::EXIT_SUCCESS
+    } else {
+        cortex_m_semihosting::debug::EXIT_FAILURE
+    });
 
     loop {
         cortex_m::asm::nop();
     }
+}
+
+#[cfg(feature = "firmverse-probe")]
+#[inline(never)]
+fn firmverse_self_test(selector: u8) -> bool {
+    let mut lifecycle = KeyLifecycle::new(ProbeStore::new(), ProbeEntropy::new(selector));
+    if lifecycle.begin_create(MnemonicSize::Words24).is_err() || lifecycle.commit_pending().is_err()
+    {
+        return false;
+    }
+
+    let passphrase = match NormalizedPassphrase::from_ascii("firmverse-hardware") {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let wallet = match lifecycle.open_context(&passphrase) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let context = match unlocked_context(wallet.id(), selector | 1) {
+        Some(value) => value,
+        None => return false,
+    };
+
+    let secp_target = key_target(AccountId(1), selector, false);
+    let secp_locator = context.bind_key(secp_target);
+    let secp_hd = match HdKeyBackend::new(
+        account_descriptor(wallet.id(), AccountId(1), false),
+        KeyFamily::Secp256k1Bip32,
+        wallet.seed(),
+    ) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let secp_backend = match secp_hd.software_backend(secp_locator) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let secp_runtime = CryptoRuntime::new(secp_backend);
+    let secp_payload = [selector; 96];
+
+    let secp_public = secp_runtime.execute(
+        CryptoOperation::DerivePublicKey {
+            key: secp_locator,
+            format: PublicKeyFormat::Compressed,
+        },
+        None,
+    );
+    if !matches!(
+        secp_public,
+        Ok(CryptoOutput::PublicKey { ref bytes, .. }) if bytes.len() == 33
+    ) {
+        return false;
+    }
+    let secp_digest = secp_runtime.execute(
+        CryptoOperation::Hash {
+            algorithm: HashAlgorithm::Sha256,
+            payload: PayloadId(0xF100_0001),
+        },
+        Some(&secp_payload),
+    );
+    if !matches!(
+        secp_digest,
+        Ok(CryptoOutput::Digest { ref bytes, .. }) if bytes.len() == 32
+    ) {
+        return false;
+    }
+    let secp_signature = secp_runtime.execute(
+        CryptoOperation::Sign {
+            key: secp_locator,
+            scheme: SignatureScheme::Ecdsa {
+                curve: Curve::Secp256k1,
+                recoverable: true,
+            },
+            prehash: HashAlgorithm::Sha256,
+            payload: PayloadId(0xF100_0002),
+        },
+        Some(&secp_payload),
+    );
+    if !matches!(
+        secp_signature,
+        Ok(CryptoOutput::Signature { ref bytes, .. }) if bytes.len() == 64
+    ) {
+        return false;
+    }
+
+    let ed_target = key_target(AccountId(2), selector, true);
+    let ed_locator = context.bind_key(ed_target);
+    let ed_hd = match HdKeyBackend::new(
+        account_descriptor(wallet.id(), AccountId(2), true),
+        KeyFamily::Ed25519Slip10,
+        wallet.seed(),
+    ) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let ed_backend = match ed_hd.software_backend(ed_locator) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let ed_runtime = CryptoRuntime::new(ed_backend);
+    let ed_payload = [selector.wrapping_add(1); 96];
+
+    let ed_public = ed_runtime.execute(
+        CryptoOperation::DerivePublicKey {
+            key: ed_locator,
+            format: PublicKeyFormat::Raw,
+        },
+        None,
+    );
+    if !matches!(
+        ed_public,
+        Ok(CryptoOutput::PublicKey { ref bytes, .. }) if bytes.len() == 32
+    ) {
+        return false;
+    }
+    let ed_signature = ed_runtime.execute(
+        CryptoOperation::Sign {
+            key: ed_locator,
+            scheme: SignatureScheme::Ed25519,
+            prehash: HashAlgorithm::None,
+            payload: PayloadId(0xF100_0003),
+        },
+        Some(&ed_payload),
+    );
+    if !matches!(
+        ed_signature,
+        Ok(CryptoOutput::Signature { ref bytes, .. }) if bytes.len() == 64
+    ) {
+        return false;
+    }
+
+    drop(ed_runtime);
+    drop(ed_hd);
+    drop(secp_runtime);
+    drop(secp_hd);
+    drop(wallet);
+    lifecycle.wipe().is_ok()
 }
 
 #[inline(never)]
