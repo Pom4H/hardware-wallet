@@ -27,7 +27,10 @@ pub fn update(state: State, event: Event) -> Transition {
             auth::unlock_requested(state, id, host, trust)
         }
         Event::PinVerified(id) => auth::pin_verified(state, id),
-        Event::PinRejected(id) => auth::pin_rejected(state, id),
+        Event::PinRejected {
+            id,
+            failed_attempts,
+        } => auth::pin_rejected(state, id, failed_attempts),
         Event::PassphraseProvided(id) => auth::passphrase_provided(state, id),
         Event::PassphraseSkipped(id) => auth::passphrase_skipped(state, id),
         Event::SessionOpened {
