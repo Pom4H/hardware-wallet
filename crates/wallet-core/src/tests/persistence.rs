@@ -69,9 +69,12 @@ fn reboot_discards_confirmed_but_unpersisted_setting_change() {
     assert_eq!(state.policy().blind_signing, BlindSigningPolicy::Deny);
 
     let restored = State::restore(snapshot);
-    let stale = update(restored, Event::SettingChangePersisted(id));
-    assert_eq!(stale.effect, Effect::Reject(RejectReason::InvalidState));
-    assert_eq!(stale.state.policy().blind_signing, BlindSigningPolicy::Deny);
+    let callback = update(restored, Event::SettingChangePersisted(id));
+    assert_eq!(callback.effect, Effect::Reject(RejectReason::InvalidState));
+    assert_eq!(
+        callback.state.policy().blind_signing,
+        BlindSigningPolicy::Deny
+    );
 }
 
 #[test]
@@ -92,7 +95,7 @@ fn reboot_discards_inflight_operation_and_its_completion_callback() {
     assert!(matches!(state.flow(), FlowState::Operation(_)));
 
     let restored = State::restore(snapshot);
-    let stale = update(restored, Event::OperationCompleted(operation));
-    assert_eq!(stale.effect, Effect::Reject(RejectReason::InvalidState));
-    assert_eq!(stale.state.flow(), FlowState::Idle);
+    let callback = update(restored, Event::OperationCompleted(operation));
+    assert_eq!(callback.effect, Effect::Reject(RejectReason::InvalidState));
+    assert_eq!(callback.state.flow(), FlowState::Idle);
 }
