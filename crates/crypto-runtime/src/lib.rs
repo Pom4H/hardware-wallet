@@ -6,10 +6,7 @@ use hardware_wallet_chain_api::{
     MAX_DIGEST_BYTES, MAX_PUBLIC_KEY_BYTES, PublicKeyFormat, SignatureScheme,
 };
 use hardware_wallet_core::{KeyTarget, WalletContextId};
-use k256::{
-    ecdsa::{Signature as Secp256k1Signature, SigningKey as Secp256k1SigningKey},
-    elliptic_curve::sec1::ToSec1Point,
-};
+use k256::ecdsa::{Signature as Secp256k1Signature, SigningKey as Secp256k1SigningKey};
 use ripemd::Ripemd160;
 use sha2::{Digest, Sha256, Sha512_256};
 use sha3::Keccak256;
