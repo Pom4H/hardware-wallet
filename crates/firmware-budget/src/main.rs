@@ -40,7 +40,7 @@ struct ProbeEntropy {
 }
 
 impl ProbeEntropy {
-    const fn new(selector: u8) -> Self {
+    fn new(selector: u8) -> Self {
         let mut bytes = [0_u8; ROOT_BYTES];
         let mut index = 0;
         while index < ROOT_BYTES {
@@ -267,9 +267,7 @@ fn exercise_secp_runtime(
     for operation in operations {
         let input = match operation {
             CryptoOperation::DerivePublicKey { .. } => None,
-            CryptoOperation::Hash { .. } | CryptoOperation::Sign { .. } => {
-                Some(payload.as_slice())
-            }
+            CryptoOperation::Hash { .. } | CryptoOperation::Sign { .. } => Some(payload.as_slice()),
         };
         if let Ok(output) = runtime.execute(operation, input) {
             score = score.wrapping_add(core::mem::size_of_val(&output) as u32);
@@ -303,9 +301,7 @@ fn exercise_ed25519_runtime(
     for operation in operations {
         let input = match operation {
             CryptoOperation::DerivePublicKey { .. } => None,
-            CryptoOperation::Hash { .. } | CryptoOperation::Sign { .. } => {
-                Some(payload.as_slice())
-            }
+            CryptoOperation::Hash { .. } | CryptoOperation::Sign { .. } => Some(payload.as_slice()),
         };
         if let Ok(output) = runtime.execute(operation, input) {
             score = score.wrapping_add(core::mem::size_of_val(&output) as u32);
@@ -398,9 +394,7 @@ fn exercise_domain_surface(selector: u8) -> u32 {
         assurance: ReviewAssurance::Full,
         interaction: Interaction::Confirm,
     };
-    let change = SettingChange::Security(SecuritySetting::BlindSigning(
-        BlindSigningPolicy::Allow,
-    ));
+    let change = SettingChange::Security(SecuritySetting::BlindSigning(BlindSigningPolicy::Allow));
 
     let event = match selector % 45 {
         0 => Event::StartCreate {
@@ -489,9 +483,7 @@ fn exercise_domain_surface(selector: u8) -> u32 {
         _ => Event::SettingChangeRequested {
             id: settings,
             host,
-            change: SettingChange::Security(SecuritySetting::PinExhaustion(
-                PinExhaustion::Lock,
-            )),
+            change: SettingChange::Security(SecuritySetting::PinExhaustion(PinExhaustion::Lock)),
         },
     };
 
