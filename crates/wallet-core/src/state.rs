@@ -1,6 +1,6 @@
 use crate::{
     AuthId, HostId, MaintenanceId, OperationId, PairingId, PassphraseMode, SecurityPolicy,
-    SessionId, SetupId,
+    SessionId, SettingChange, SettingsId, SetupId, WalletContextId,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,6 +74,7 @@ pub enum HostTrust {
 pub struct Session {
     pub id: SessionId,
     pub host: HostId,
+    pub wallet: WalletContextId,
     pub trust: HostTrust,
 }
 
@@ -175,6 +176,7 @@ pub enum OperationStage {
 pub struct PendingOperation {
     pub id: OperationId,
     pub host: HostId,
+    pub wallet: WalletContextId,
     pub kind: Option<OperationKind>,
     pub stage: OperationStage,
 }
@@ -183,6 +185,12 @@ pub struct PendingOperation {
 pub enum MaintenanceKind {
     ChangePin,
     VerifyBackup,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingsStage {
+    Reviewing,
+    Persisting,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -197,6 +205,12 @@ pub enum FlowState {
     Maintenance {
         id: MaintenanceId,
         kind: MaintenanceKind,
+    },
+    Settings {
+        id: SettingsId,
+        host: HostId,
+        change: SettingChange,
+        stage: SettingsStage,
     },
     FactoryReset {
         id: MaintenanceId,
@@ -268,6 +282,11 @@ impl State {
 
     pub(crate) const fn with_flow(mut self, flow: FlowState) -> Self {
         self.flow = flow;
+        self
+    }
+
+    pub(crate) const fn with_policy(mut self, policy: SecurityPolicy) -> Self {
+        self.policy = policy;
         self
     }
 }
