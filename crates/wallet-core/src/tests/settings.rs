@@ -33,9 +33,7 @@ fn session_and_operation_share_same_wallet_context() {
 #[test]
 fn blind_signing_changes_only_after_confirmed_persistence() {
     let id = SettingsId(100);
-    let change = SettingChange::Security(SecuritySetting::BlindSigning(
-        BlindSigningPolicy::Allow,
-    ));
+    let change = SettingChange::Security(SecuritySetting::BlindSigning(BlindSigningPolicy::Allow));
     let state = unlocked_state(HostTrust::Trusted);
     assert_eq!(state.policy().blind_signing, BlindSigningPolicy::Deny);
 
@@ -146,11 +144,7 @@ fn revoking_active_host_downgrades_current_session_trust() {
     let change = SettingChange::RevokeHost(host);
     let state = unlocked_state(HostTrust::Trusted);
 
-    let state = update(
-        state,
-        Event::SettingChangeRequested { id, host, change },
-    )
-    .state;
+    let state = update(state, Event::SettingChangeRequested { id, host, change }).state;
     let state = update(state, Event::SettingChangeConfirmed(id)).state;
     let transition = update(state, Event::SettingChangePersisted(id));
 
