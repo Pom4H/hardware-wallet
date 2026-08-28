@@ -17,6 +17,28 @@ pub enum RecoveryFormat {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WalletOrigin {
+    Generated,
+    Recovered(RecoveryFormat),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BackupStatus {
+    /// A backup was verified against the active wallet on this device.
+    Verified,
+    /// This wallet was restored from recovery material, but no independent
+    /// backup check has been completed since restoration.
+    RecoverySource,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WalletMetadata {
+    pub origin: WalletOrigin,
+    pub backup: BackupStatus,
+    pub passphrase: PassphraseMode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProvisioningStage {
     CreatingKeyMaterial,
     CapturingRecoveryMaterial,
@@ -37,7 +59,7 @@ pub enum Lifecycle {
         stage: ProvisioningStage,
     },
     Provisioned {
-        passphrase: PassphraseMode,
+        metadata: WalletMetadata,
     },
     Wiping,
 }
@@ -204,6 +226,14 @@ impl State {
     #[must_use]
     pub const fn lifecycle(self) -> Lifecycle {
         self.lifecycle
+    }
+
+    #[must_use]
+    pub const fn wallet_metadata(self) -> Option<WalletMetadata> {
+        match self.lifecycle {
+            Lifecycle::Provisioned { metadata } => Some(metadata),
+            _ => None,
+        }
     }
 
     #[must_use]
