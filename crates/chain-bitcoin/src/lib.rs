@@ -580,6 +580,7 @@ fn parse_psbt(key: KeyTarget, psbt: &BoundedBytes<MAX_PSBT_BYTES>) -> Result<P2w
     let unsigned = unsigned.ok_or(Error::InvalidPsbt)?;
     let tx = parse_unsigned_transaction(unsigned.as_slice())?;
 
+    let mut non_witness_utxo_seen = false;
     let mut witness_utxo = None;
     let mut sighash = SIGHASH_ALL;
     let mut psbt_pubkey = None;
@@ -593,6 +594,15 @@ fn parse_psbt(key: KeyTarget, psbt: &BoundedBytes<MAX_PSBT_BYTES>) -> Result<P2w
         let value = cursor.read_slice(value_len)?;
         let (&field_type, key_data) = map_key.split_first().ok_or(Error::InvalidPsbt)?;
         match field_type {
+            // Bitcoin Core includes this redundant field even for native SegWit.
+            // It is not a source of amount/script truth in this one-input P2WPKH
+            // subset: `witness_utxo` remains mandatory and is committed by BIP143.
+            0x00 if key_data.is_empty() => {
+                if non_witness_utxo_seen || value.is_empty() {
+                    return Err(Error::DuplicateField);
+                }
+                non_witness_utxo_seen = true;
+            }
             0x01 if key_data.is_empty() => {
                 if witness_utxo.is_some() {
                     return Err(Error::DuplicateField);
