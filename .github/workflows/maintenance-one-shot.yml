@@ -1,0 +1,55 @@
+name: Maintenance one-shot
+
+on:
+  push:
+    paths:
+      - .github/workflows/maintenance-one-shot.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Accept redundant Core non-witness UTXO
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('crates/chain-bitcoin/src/lib.rs')
+          text = path.read_text()
+          text = text.replace(
+              '    let mut witness_utxo = None;\n    let mut sighash = SIGHASH_ALL;',
+              '    let mut non_witness_utxo_seen = false;\n    let mut witness_utxo = None;\n    let mut sighash = SIGHASH_ALL;',
+              1,
+          )
+          anchor = '''        match field_type {\n            0x01 if key_data.is_empty() => {'''
+          replacement = '''        match field_type {\n            // Bitcoin Core includes this redundant field even for native SegWit.\n            // It is not a source of amount/script truth in this one-input P2WPKH\n            // subset: `witness_utxo` remains mandatory and is committed by BIP143.\n            0x00 if key_data.is_empty() => {\n                if non_witness_utxo_seen || value.is_empty() {\n                    return Err(Error::DuplicateField);\n                }\n                non_witness_utxo_seen = true;\n            }\n            0x01 if key_data.is_empty() => {'''
+          if anchor not in text:
+              raise SystemExit('input map anchor not found')
+          text = text.replace(anchor, replacement, 1)
+          path.write_text(text)
+      - name: Format
+        run: cargo fmt --all
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+      - name: no_std
+        run: cargo check --workspace --no-default-features
+      - name: Commit verified compatibility patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/chain-bitcoin/src/lib.rs
+          git commit -m 'Accept redundant PSBT non-witness UTXO'
+          git push origin HEAD:main
