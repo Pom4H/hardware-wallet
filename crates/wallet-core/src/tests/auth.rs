@@ -151,6 +151,28 @@ fn host_cannot_supply_its_own_trust_level() {
 }
 
 #[test]
+fn stale_host_trust_result_after_disconnect_is_rejected() {
+    let host = HostId(92);
+    let auth = AuthId(93);
+    let state = provisioned_state(PassphraseMode::Disabled);
+    let state = update(state, Event::UnlockRequested { id: auth, host }).state;
+    assert!(matches!(state.auth(), AuthState::ResolvingHost { .. }));
+
+    let state = update(state, Event::HostDisconnected(host)).state;
+    assert!(matches!(state.auth(), AuthState::Locked { .. }));
+
+    let stale = update(
+        state,
+        Event::HostTrustResolved {
+            id: auth,
+            trust: HostTrust::Trusted,
+        },
+    );
+    assert_eq!(stale.effect, Effect::Reject(RejectReason::InvalidState));
+    assert!(matches!(stale.state.auth(), AuthState::Locked { .. }));
+}
+
+#[test]
 fn pairing_is_bound_to_current_session_host() {
     let state = unlocked_state(HostTrust::Untrusted);
     let transition = update(
