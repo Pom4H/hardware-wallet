@@ -1,6 +1,7 @@
 use super::*;
 
 mod auth;
+mod keys;
 mod maintenance;
 mod operations;
 mod provisioning;

@@ -5,6 +5,7 @@ members = [
     "crates/chain-api",
     "crates/chain-bitcoin",
     "crates/chain-ethereum",
+    "crates/chain-solana",
 ]
 
 [workspace.package]

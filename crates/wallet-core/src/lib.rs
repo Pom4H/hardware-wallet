@@ -1,17 +1,26 @@
 #![no_std]
 
+mod crypto;
 mod effect;
 mod event;
 mod ids;
+mod key;
 mod policy;
 mod reducer;
 mod state;
 
+pub use crypto::{
+    CryptoOperation, Curve, HashAlgorithm, PayloadId, PublicKeyFormat, SignatureScheme,
+};
 pub use effect::{Effect, RejectReason, Transition};
 pub use event::Event;
 pub use ids::{
     AuthId, HostId, MaintenanceId, OperationId, PairingId, SessionId, SettingsId, SetupId,
     WalletContextId,
+};
+pub use key::{
+    AccountDescriptor, AccountId, AccountKind, ChildNumber, DerivationError, DerivationPath,
+    KeyLocator, KeyPurpose, MAX_DERIVATION_DEPTH,
 };
 pub use policy::{
     BlindSigningPolicy, DisconnectPolicy, PassphraseMode, PinExhaustion, SecurityPolicy,

@@ -1,6 +1,10 @@
 #![no_std]
 
-pub use hardware_wallet_core::{Interaction, OperationKind, ReviewAssurance, ReviewPlan};
+pub use hardware_wallet_core::{
+    AccountDescriptor, AccountId, AccountKind, CryptoOperation, Curve, DerivationError,
+    DerivationPath, HashAlgorithm, Interaction, KeyLocator, KeyPurpose, OperationKind, PayloadId,
+    PublicKeyFormat, ReviewAssurance, ReviewPlan, SignatureScheme, WalletContextId,
+};
 
 /// Stable identifier for a chain implementation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -11,7 +15,7 @@ pub struct ChainId(pub &'static str);
 /// to execute after approval.
 ///
 /// `hardware-wallet-core` deliberately does not know transaction formats,
-/// address formats, hashing rules, derivation paths, signature encodings or
+/// address formats, hashing rules, derivation policies, signature encodings or
 /// smart-contract semantics.
 pub trait ChainModule {
     type Request;
@@ -35,8 +39,13 @@ pub trait ChainModule {
     /// core. This metadata never replaces the actual human-readable review.
     fn review_plan(review: &Self::Review) -> ReviewPlan;
 
-    /// Produce the exact cryptographic/public-key operation only after the core
-    /// has accepted the review and, where required, obtained user approval.
+    /// Produce the exact public-key/signing execution only after the core has
+    /// accepted the review and, where required, obtained user approval.
+    ///
+    /// Implementations should express cryptographic work with the generic
+    /// `CryptoOperation` primitives where possible. Chain-specific execution
+    /// types remain allowed for streaming, multi-step and protocol-specific
+    /// operations.
     ///
     /// # Errors
     ///

@@ -4,8 +4,8 @@ A minimal, auditable, chain-agnostic hardware wallet built in Rust.
 
 The project is a reference device, not a wallet for one specific blockchain. The
 trusted core owns generic wallet behavior — provisioning, authorization, sessions,
-user approval, security policy and operation lifecycle — while chain-specific parsing,
-review and cryptographic rules live in isolated modules.
+accounts, key locators, user approval, security policy and operation lifecycle — while
+chain-specific parsing, review and cryptographic rules live in isolated modules.
 
 > **Status:** architecture and domain implementation in progress. Do not use this
 > project to protect real funds.
@@ -21,6 +21,8 @@ review and cryptographic rules live in isolated modules.
 - host- and wallet-context-bound unlock sessions;
 - automatic locking on disconnect/expiry;
 - trusted-host pairing and revocation;
+- account identifiers and fixed-capacity hierarchical derivation paths;
+- generic public-key and signing operations across multiple crypto schemes;
 - address display, public-key export and account creation operations;
 - transaction, message, typed-data, arbitrary-data and custom chain operations;
 - device-owned review before execution;
@@ -43,7 +45,8 @@ untrusted host request
  chain-specific parser
         │
         ├── human review
-        └── ReviewPlan
+        ├── ReviewPlan
+        └── execution plan
               │
               ▼
       Hardware Wallet Core
@@ -51,7 +54,10 @@ untrusted host request
               │
        ┌──────┼───────────┐
        ▼      ▼           ▼
-      UI   secure ops   persistence
+      UI   crypto ops   persistence
+             │
+             ├── derive public key
+             └── sign
 ```
 
 The core must never contain `if chain == bitcoin` / `if chain == ethereum` branches.
@@ -62,19 +68,21 @@ input.
 
 ```text
 crates/
-  wallet-core/        no_std lifecycle, auth, policy and operation state machine
+  wallet-core/        no_std lifecycle, auth, keys, policy and operation state machine
   chain-api/          contract for on-device parsing, review and execution
   chain-bitcoin/      Bitcoin adapter (parsers intentionally still incomplete)
   chain-ethereum/     Ethereum adapter (parsers intentionally still incomplete)
+  chain-solana/       Solana adapter used to exercise the Ed25519-style boundary
 
 docs/
   DOMAIN.md           state machine and invariants
+  KEYS.md             account, derivation and generic cryptographic model
   SECURITY.md         trust boundaries and fail-closed rules
 ```
 
-Bitcoin and Ethereum are the first chain adapters because they exercise very different
-transaction and signing models. Additional chains must be addable without changing the
-wallet state machine.
+Bitcoin, Ethereum and Solana are the initial architecture probes because they exercise
+very different transaction, account, derivation and signature models. Additional chains
+must be addable without changing the wallet state machine.
 
 ## Core rule
 
@@ -86,7 +94,8 @@ The runtime executes effects and feeds results back as events. The same domain l
 can therefore run in pure tests, a firmware sandbox, co-simulation, and later the real
 board.
 
-See [`docs/DOMAIN.md`](docs/DOMAIN.md) and [`docs/SECURITY.md`](docs/SECURITY.md).
+See [`docs/DOMAIN.md`](docs/DOMAIN.md), [`docs/KEYS.md`](docs/KEYS.md) and
+[`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Target hardware
 
