@@ -12,10 +12,7 @@ pub enum Curve {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SignatureScheme {
-    Ecdsa {
-        curve: Curve,
-        recoverable: bool,
-    },
+    Ecdsa { curve: Curve, recoverable: bool },
     SchnorrSecp256k1,
     Ed25519,
     Sr25519,

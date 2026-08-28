@@ -1,8 +1,8 @@
 #![no_std]
 
 use hardware_wallet_chain_api::{
-    ChainId, ChainModule, CryptoOperation, Interaction, KeyLocator, OperationKind,
-    PublicKeyFormat, ReviewAssurance, ReviewPlan,
+    ChainId, ChainModule, CryptoOperation, Interaction, KeyLocator, OperationKind, PublicKeyFormat,
+    ReviewAssurance, ReviewPlan,
 };
 
 pub struct Solana;
