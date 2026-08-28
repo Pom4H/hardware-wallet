@@ -40,6 +40,13 @@ pub struct ChildNumber {
 impl ChildNumber {
     pub const MAX_INDEX: u32 = 0x7fff_ffff;
 
+    /// Creates one hierarchical child selector.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DerivationError::IndexOutOfRange`] when `index` uses the high
+    /// bit reserved by common hardened-derivation encodings. Hardenedness is
+    /// represented explicitly by this type instead.
     pub const fn new(index: u32, hardened: bool) -> Result<Self, DerivationError> {
         if index > Self::MAX_INDEX {
             Err(DerivationError::IndexOutOfRange)
@@ -79,6 +86,12 @@ impl DerivationPath {
         }
     }
 
+    /// Appends one derivation component without allocating.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DerivationError::TooDeep`] when the path already contains
+    /// [`MAX_DERIVATION_DEPTH`] components.
     pub fn push(&mut self, child: ChildNumber) -> Result<(), DerivationError> {
         let index = usize::from(self.len);
         if index == MAX_DERIVATION_DEPTH {
