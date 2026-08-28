@@ -11,9 +11,11 @@ use hardware_wallet_core::{
 };
 use hardware_wallet_crypto_runtime::{CryptoRuntime, SoftwareKeyBackend};
 use hardware_wallet_hd_key_backend::{HdKeyBackend, KeyFamily};
+use hardware_wallet_key_lifecycle::test_utils::{FixedEntropySource, MemorySecretStore};
+use hardware_wallet_key_lifecycle::{KeyLifecycle, MnemonicSize, NormalizedPassphrase};
 
 const RECIPIENT: &str = "GcQfK48DV9BzDuDeCyV2sShbAAY4vqmK8JSj1NBrwoVZ";
-const TEST_SEED: [u8; 32] = [
+const TEST_ENTROPY: [u8; 32] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31,
 ];
@@ -22,11 +24,29 @@ fn main() {
     let rpc = env::var("SOLANA_RPC_URL").expect("SOLANA_RPC_URL from chain-sandbox");
     let cli = env::var("SOLANA_CLI").expect("SOLANA_CLI from chain-sandbox");
 
-    let context = unlocked_context();
+    let mut lifecycle = KeyLifecycle::new(
+        MemorySecretStore::new(),
+        FixedEntropySource::new(TEST_ENTROPY),
+    );
+    lifecycle
+        .begin_create(MnemonicSize::Words24)
+        .expect("device entropy creates BIP39 wallet");
+    lifecycle
+        .commit_pending()
+        .expect("provisioning persists root entropy");
+    let wallet = lifecycle
+        .open_context(&NormalizedPassphrase::empty())
+        .expect("open base wallet context");
+
+    let context = unlocked_context(wallet.id());
     let target = key_target();
     let locator = context.bind_key(target);
-    let hd = HdKeyBackend::new(account_descriptor(), KeyFamily::Ed25519Slip10, &TEST_SEED)
-        .expect("HD backend");
+    let hd = HdKeyBackend::new(
+        account_descriptor(wallet.id()),
+        KeyFamily::Ed25519Slip10,
+        wallet.seed(),
+    )
+    .expect("HD backend");
     let backend = hd
         .software_backend(locator)
         .expect("derive Solana SLIP-0010 child key");
@@ -114,10 +134,10 @@ fn execute_crypto(
         .expect("HD-derived crypto runtime executes approved operation")
 }
 
-fn account_descriptor() -> AccountDescriptor {
+fn account_descriptor(wallet: WalletContextId) -> AccountDescriptor {
     AccountDescriptor {
         id: AccountId(0),
-        wallet: WalletContextId(4),
+        wallet,
         kind: AccountKind::Hd,
         root: path(&[(44, true), (501, true), (0, true)]),
     }
@@ -180,7 +200,7 @@ fn wait_for_confirmation(rpc: &str, signature: &str) {
     panic!("transaction {signature} was sent but not confirmed")
 }
 
-fn unlocked_context() -> hardware_wallet_core::ExecutionContext {
+fn unlocked_context(wallet: WalletContextId) -> hardware_wallet_core::ExecutionContext {
     let setup = SetupId(1);
     let host = HostId(7);
     let auth = AuthId(2);
@@ -213,7 +233,7 @@ fn unlocked_context() -> hardware_wallet_core::ExecutionContext {
         Event::SessionOpened {
             auth,
             session: SessionId(3),
-            wallet: WalletContextId(4),
+            wallet,
         },
     )
     .state;
