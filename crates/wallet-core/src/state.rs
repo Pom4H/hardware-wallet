@@ -38,6 +38,17 @@ pub struct WalletMetadata {
     pub passphrase: PassphraseMode,
 }
 
+/// Non-secret state that may be restored after a reboot.
+///
+/// Trusted-host records and PIN retry counters are intentionally not included:
+/// they belong to their dedicated persistent backends. Sessions and foreground
+/// flows are always transient and are never restored.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PersistentState {
+    pub wallet: Option<WalletMetadata>,
+    pub policy: SecurityPolicy,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProvisioningStage {
     CreatingKeyMaterial,
@@ -82,12 +93,14 @@ pub struct Session {
 pub enum AuthState {
     Unavailable,
     Locked {
+        /// Last durable retry count observed from the secure auth backend.
         failed_attempts: u8,
     },
     VerifyingPin {
         id: AuthId,
         host: HostId,
         trust: HostTrust,
+        /// Last durable retry count observed before this verification attempt.
         failed_attempts: u8,
     },
     AwaitingPassphrase {
@@ -237,6 +250,28 @@ impl State {
         }
     }
 
+    /// Restore the non-secret wallet state after a reboot.
+    ///
+    /// Sessions, wallet-context handles and foreground flows are deliberately
+    /// discarded. A provisioned wallet always comes back locked.
+    #[must_use]
+    pub const fn restore(persistent: PersistentState) -> Self {
+        match persistent.wallet {
+            Some(metadata) => Self {
+                lifecycle: Lifecycle::Provisioned { metadata },
+                auth: AuthState::Locked { failed_attempts: 0 },
+                flow: FlowState::Idle,
+                policy: persistent.policy,
+            },
+            None => Self {
+                lifecycle: Lifecycle::Empty,
+                auth: AuthState::Unavailable,
+                flow: FlowState::Idle,
+                policy: persistent.policy,
+            },
+        }
+    }
+
     #[must_use]
     pub const fn lifecycle(self) -> Lifecycle {
         self.lifecycle
@@ -247,6 +282,25 @@ impl State {
         match self.lifecycle {
             Lifecycle::Provisioned { metadata } => Some(metadata),
             _ => None,
+        }
+    }
+
+    /// Return a stable non-secret snapshot suitable for persistent storage.
+    ///
+    /// Provisioning and wiping are intentionally not snapshot-able because
+    /// their crash-consistency protocol belongs to the persistence runtime.
+    #[must_use]
+    pub const fn persistent_snapshot(self) -> Option<PersistentState> {
+        match self.lifecycle {
+            Lifecycle::Empty => Some(PersistentState {
+                wallet: None,
+                policy: self.policy,
+            }),
+            Lifecycle::Provisioned { metadata } => Some(PersistentState {
+                wallet: Some(metadata),
+                policy: self.policy,
+            }),
+            Lifecycle::Provisioning { .. } | Lifecycle::Wiping => None,
         }
     }
 
