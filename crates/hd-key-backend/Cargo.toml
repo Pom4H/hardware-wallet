@@ -1,0 +1,18 @@
+[package]
+name = "hardware-wallet-hd-key-backend"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bip32 = { version = "0.5.3", default-features = false }
+hardware-wallet-core = { path = "../wallet-core" }
+hardware-wallet-crypto-runtime = { path = "../crypto-runtime" }
+hmac = { version = "0.13.0", default-features = false }
+k256 = { version = "0.14.0", default-features = false, features = ["arithmetic"] }
+sha2 = { version = "0.11.0", default-features = false }
+zeroize = { version = "1.8", default-features = false }
+
+[lints]
+workspace = true
