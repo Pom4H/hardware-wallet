@@ -6,7 +6,9 @@ The current adapter intentionally supports a narrow PSBT subset that the device 
 
 - PSBT v0.
 - Exactly one input and one output.
-- Native SegWit P2WPKH input with `witness_utxo`.
+- Native SegWit P2WPKH input with mandatory `witness_utxo`.
+- Bitcoin Core's redundant `non_witness_utxo` field may also be present; it is not used as amount/script truth in this one-input P2WPKH subset.
+- Optional BIP32 derivation metadata for the input public key.
 - Native SegWit P2WPKH output.
 - `SIGHASH_ALL` only.
 - Device-owned review of input amount, output amount, destination witness program and fee.
