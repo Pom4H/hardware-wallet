@@ -1,0 +1,71 @@
+name: Chain integration
+
+on:
+  push:
+    paths:
+      - .github/workflows/chains.yml
+      - crates/chain-api/**
+      - crates/chain-bitcoin/**
+      - crates/chain-ethereum/**
+      - crates/chain-solana/**
+  pull_request:
+    paths:
+      - .github/workflows/chains.yml
+      - crates/chain-api/**
+      - crates/chain-bitcoin/**
+      - crates/chain-ethereum/**
+      - crates/chain-solana/**
+  workflow_dispatch:
+
+jobs:
+  chain:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chain: bitcoin
+            package: hardware-wallet-chain-bitcoin
+          - chain: ethereum
+            package: hardware-wallet-chain-ethereum
+          - chain: solana
+            package: hardware-wallet-chain-solana
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Pin the external sandbox to an exact green commit, never to main.
+      - name: Start local chain
+        uses: Pom4H/chain-sandbox@e7e662124133042c8aae5dc412799d4b725e0749
+        with:
+          chain: ${{ matrix.chain }}
+
+      - name: Verify consumer RPC boundary
+        shell: bash
+        run: |
+          case "${{ matrix.chain }}" in
+            bitcoin)
+              curl --fail --silent --show-error \
+                --header 'content-type: text/plain;' \
+                --data-binary '{"jsonrpc":"1.0","id":"wallet","method":"getblockcount","params":[]}' \
+                "$BITCOIN_RPC_URL" | grep -q '"result":101'
+              ;;
+            ethereum)
+              curl --fail --silent --show-error \
+                --header 'content-type: application/json' \
+                --data-binary '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+                "$ETHEREUM_RPC_URL" | grep -qi '0x7a69'
+              ;;
+            solana)
+              curl --fail --silent --show-error \
+                --header 'content-type: application/json' \
+                --data-binary '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
+                "$SOLANA_RPC_URL" | grep -q '"ok"'
+              ;;
+          esac
+
+      - name: Run chain crate tests
+        run: cargo test -p "${{ matrix.package }}"
