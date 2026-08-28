@@ -12,6 +12,24 @@ fn request_operation(state: State, operation: OperationId) -> State {
 }
 
 #[test]
+fn operation_is_bound_to_active_wallet_context() {
+    let wallet = WalletContextId(42);
+    let operation = OperationId(19);
+    let state = request_operation(
+        unlocked_state_with_wallet(HostTrust::Trusted, wallet),
+        operation,
+    );
+
+    assert!(matches!(
+        state.flow(),
+        FlowState::Operation(PendingOperation {
+            wallet: pending_wallet,
+            ..
+        }) if pending_wallet == wallet
+    ));
+}
+
+#[test]
 fn signing_always_requires_physical_confirmation() {
     let operation = OperationId(20);
     let state = request_operation(unlocked_state(HostTrust::Trusted), operation);
@@ -140,6 +158,7 @@ fn untrusted_host_can_be_forbidden_from_signing() {
         Event::SessionOpened {
             auth,
             session: SessionId(3),
+            wallet: WalletContextId(1),
         },
     )
     .state;
