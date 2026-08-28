@@ -1,73 +1,104 @@
 #![no_std]
 
 use hardware_wallet_chain_api::{
-    ChainId, ChainModule, ExecutionContext, Interaction, OperationKind, ReviewAssurance, ReviewPlan,
+    BoundedBytes, ChainExecution, ChainId, ChainModule, CryptoOperation, CryptoOutput,
+    ExecutionContext, ExecutionStep, Interaction, KeyTarget, OperationKind, PublicKeyFormat,
+    ReviewAssurance, ReviewPlan, MAX_PUBLIC_KEY_BYTES,
 };
 
 pub struct Ethereum;
 
-/// Temporary request boundary until RLP/EIP-712 parsing is implemented.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Request {
-    ShowAddress,
-    ExportPublicKey,
+    ShowAddress(KeyTarget),
+    ExportPublicKey(KeyTarget),
     SignTransaction,
     SignPersonalMessage,
     SignTypedData,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Review {
     kind: OperationKind,
+    key: Option<KeyTarget>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Execution {
-    kind: OperationKind,
+    key: hardware_wallet_chain_api::KeyLocator,
+    requested: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ExecutionResult;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Response;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Response {
+    PublicKey(BoundedBytes<MAX_PUBLIC_KEY_BYTES>),
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
     ParserNotImplemented,
+    MissingKey,
+    UnexpectedCryptoResult,
+}
+
+impl ChainExecution for Execution {
+    type Response = Response;
+    type Error = Error;
+
+    fn next(
+        &mut self,
+        result: Option<&CryptoOutput>,
+    ) -> Result<ExecutionStep<Self::Response>, Self::Error> {
+        if !self.requested {
+            if result.is_some() {
+                return Err(Error::UnexpectedCryptoResult);
+            }
+            self.requested = true;
+            return Ok(ExecutionStep::Crypto(CryptoOperation::DerivePublicKey {
+                key: self.key,
+                format: PublicKeyFormat::Uncompressed,
+            }));
+        }
+
+        let Some(CryptoOutput::PublicKey { bytes, .. }) = result else {
+            return Err(Error::UnexpectedCryptoResult);
+        };
+        Ok(ExecutionStep::Complete(Response::PublicKey(bytes.clone())))
+    }
+
+    fn payload(&self, _id: hardware_wallet_chain_api::PayloadId) -> Option<&[u8]> {
+        None
+    }
 }
 
 impl ChainModule for Ethereum {
     type Request = Request;
     type Review = Review;
     type Execution = Execution;
-    type ExecutionResult = ExecutionResult;
     type Response = Response;
     type Error = Error;
 
     const ID: ChainId = ChainId("ethereum");
 
     fn prepare_review(request: &Self::Request) -> Result<Self::Review, Self::Error> {
-        let kind = match request {
-            Request::ShowAddress => OperationKind::ShowAddress,
-            Request::ExportPublicKey => OperationKind::ExportPublicKey,
+        match request {
+            Request::ShowAddress(key) => Ok(Review {
+                kind: OperationKind::ShowAddress,
+                key: Some(*key),
+            }),
+            Request::ExportPublicKey(key) => Ok(Review {
+                kind: OperationKind::ExportPublicKey,
+                key: Some(*key),
+            }),
             Request::SignTransaction | Request::SignPersonalMessage | Request::SignTypedData => {
-                return Err(Error::ParserNotImplemented);
+                Err(Error::ParserNotImplemented)
             }
-        };
-        Ok(Review { kind })
+        }
     }
 
     fn review_plan(review: &Self::Review) -> ReviewPlan {
         ReviewPlan {
             kind: review.kind,
-            uses_private_key: matches!(
-                review.kind,
-                OperationKind::SignTransaction
-                    | OperationKind::SignMessage
-                    | OperationKind::SignTypedData
-                    | OperationKind::SignArbitraryData
-            ),
+            uses_private_key: review.kind.uses_private_key(),
             assurance: ReviewAssurance::Full,
             interaction: match review.kind {
                 OperationKind::ShowAddress => Interaction::Display,
@@ -78,15 +109,12 @@ impl ChainModule for Ethereum {
 
     fn prepare_execution(
         review: &Self::Review,
-        _context: ExecutionContext,
+        context: ExecutionContext,
     ) -> Result<Self::Execution, Self::Error> {
-        Ok(Execution { kind: review.kind })
-    }
-
-    fn finalize(
-        _review: &Self::Review,
-        _result: &Self::ExecutionResult,
-    ) -> Result<Self::Response, Self::Error> {
-        Ok(Response)
+        let key = review.key.ok_or(Error::MissingKey)?;
+        Ok(Execution {
+            key: context.bind_key(key),
+            requested: false,
+        })
     }
 }
