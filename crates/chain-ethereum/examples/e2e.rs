@@ -1,4 +1,4 @@
-use std::{env, process::Command};
+use std::{env, process::Command, thread, time::Duration};
 
 use hardware_wallet_chain_api::{
     BoundedBytes, ChainExecution, ChainModule, CryptoOutput, Curve, ExecutionStep, HashAlgorithm,
@@ -65,13 +65,13 @@ fn main() {
     assert_eq!(execution.payload(payload), Some(unsigned.as_slice()));
 
     let sign_request = [
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_signTransaction\",\"params\":[{\"type\":\"0x2\",\"from\":\"",
-    FIRST_ACCOUNT,
-    "\",\"to\":\"",
-    SECOND_ACCOUNT,
-    "\",\"nonce\":\"0x0\",\"value\":\"0x1\",\"gas\":\"0x5208\",\"maxPriorityFeePerGas\":\"0x3b9aca00\",\"maxFeePerGas\":\"0x77359400\",\"chainId\":\"0x7a69\",\"data\":\"0x\",\"accessList\":[]}]}"
-]
-.concat();
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_signTransaction\",\"params\":[{\"type\":\"0x2\",\"from\":\"",
+        FIRST_ACCOUNT,
+        "\",\"to\":\"",
+        SECOND_ACCOUNT,
+        "\",\"nonce\":\"0x0\",\"value\":\"0x1\",\"gas\":\"0x5208\",\"maxPriorityFeePerGas\":\"0x3b9aca00\",\"maxFeePerGas\":\"0x77359400\",\"chainId\":\"0x7a69\",\"data\":\"0x\",\"accessList\":[]}]}",
+    ]
+    .concat();
     let signed_by_anvil = result_hex(&rpc_call(&rpc, &sign_request));
     let signed_bytes = decode_hex(&signed_by_anvil);
     let signature =
@@ -98,13 +98,30 @@ fn main() {
     let tx_hash = result_hex(&send_response);
     assert_eq!(tx_hash.len(), 64);
 
-    let receipt_request = format!(
-        "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"eth_getTransactionReceipt\",\"params\":[\"0x{tx_hash}\"]}}"
-    );
-    let receipt = rpc_call(&rpc, &receipt_request);
+    let receipt = wait_for_receipt(&rpc, &tx_hash);
     assert!(receipt.contains("\"status\":\"0x1\""), "{receipt}");
 
     println!("ethereum e2e: 0x{tx_hash}");
+}
+
+fn wait_for_receipt(rpc: &str, tx_hash: &str) -> String {
+    let request = format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"eth_getTransactionReceipt\",\"params\":[\"0x{tx_hash}\"]}}"
+    );
+
+    for _ in 0..50 {
+        let response = rpc_call(rpc, &request);
+        if response.contains("\"status\":\"0x1\"") {
+            return response;
+        }
+        assert!(
+            response.contains("\"result\":null"),
+            "unexpected receipt response: {response}"
+        );
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    panic!("transaction 0x{tx_hash} was accepted but no successful receipt appeared")
 }
 
 fn unlocked_context() -> hardware_wallet_core::ExecutionContext {
