@@ -3,8 +3,8 @@
 use hardware_wallet_chain_api::{
     BoundedBytes, CapacityError, ChainExecution, ChainId, ChainModule, CryptoOperation,
     CryptoOutput, Curve, ExecutionContext, ExecutionStep, HashAlgorithm, Interaction, KeyTarget,
-    OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan, SignatureScheme,
-    MAX_PUBLIC_KEY_BYTES,
+    MAX_PUBLIC_KEY_BYTES, OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan,
+    SignatureScheme,
 };
 
 pub struct Bitcoin;
@@ -20,6 +20,10 @@ const SEQUENCE_PAYLOAD: PayloadId = PayloadId(0x4254_0003);
 const OUTPUTS_PAYLOAD: PayloadId = PayloadId(0x4254_0004);
 const BIP143_PAYLOAD: PayloadId = PayloadId(0x4254_0005);
 const SIGHASH_ALL: u32 = 1;
+const SECP256K1_HALF_ORDER: [u8; 32] = [
+    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0x5d, 0x57, 0x6e, 0x73, 0x57, 0xa4, 0x50, 0x1d, 0xdf, 0xe9, 0x2f, 0x46, 0x68, 0x1b, 0x20, 0xa0,
+];
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -81,10 +85,7 @@ pub struct P2wpkhReview {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Review {
-    PublicKey {
-        kind: OperationKind,
-        key: KeyTarget,
-    },
+    PublicKey { kind: OperationKind, key: KeyTarget },
     P2wpkh(P2wpkhReview),
 }
 
@@ -401,10 +402,7 @@ impl Execution {
         compact.copy_from_slice(bytes.as_slice());
         validate_compact_signature(compact)?;
 
-        let ExecutionKind::P2wpkh {
-            tx, public_key, ..
-        } = &self.kind
-        else {
+        let ExecutionKind::P2wpkh { tx, public_key, .. } = &self.kind else {
             return Err(Error::UnexpectedCryptoResult);
         };
         let signed = serialize_signed_transaction(*tx, compact, *public_key)?;
@@ -504,7 +502,7 @@ impl ChainModule for Bitcoin {
 ///
 /// # Errors
 ///
-/// Returns an [`Error`] when the transaction is not the exact supported SegWit
+/// Returns an [`Error`] when the transaction is not the exact supported `SegWit`
 /// shape or when its DER signature is malformed.
 pub fn extract_p2wpkh_witness(raw: &[u8]) -> Result<P2wpkhWitness, Error> {
     let mut cursor = Cursor::new(raw);
@@ -550,10 +548,7 @@ pub fn extract_p2wpkh_witness(raw: &[u8]) -> Result<P2wpkhWitness, Error> {
     })
 }
 
-fn parse_psbt(
-    key: KeyTarget,
-    psbt: &BoundedBytes<MAX_PSBT_BYTES>,
-) -> Result<P2wpkhReview, Error> {
+fn parse_psbt(key: KeyTarget, psbt: &BoundedBytes<MAX_PSBT_BYTES>) -> Result<P2wpkhReview, Error> {
     let mut cursor = Cursor::new(psbt.as_slice());
     if cursor.read_array::<5>()? != *b"psbt\xff" {
         return Err(Error::InvalidPsbt);
@@ -608,9 +603,8 @@ fn parse_psbt(
                 if value.len() != 4 {
                     return Err(Error::UnsupportedSighash);
                 }
-                sighash = u32::from_le_bytes(
-                    value.try_into().map_err(|_| Error::UnsupportedSighash)?,
-                );
+                sighash =
+                    u32::from_le_bytes(value.try_into().map_err(|_| Error::UnsupportedSighash)?);
             }
             0x06 if key_data.len() == 33 => {
                 if psbt_pubkey.is_some() {
@@ -770,12 +764,7 @@ fn validate_compact_signature(signature: [u8; 64]) -> Result<(), Error> {
     {
         return Err(Error::InvalidSignature);
     }
-    const HALF_ORDER: [u8; 32] = [
-        0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0x5d, 0x57, 0x6e, 0x73, 0x57, 0xa4, 0x50, 0x1d, 0xdf, 0xe9, 0x2f, 0x46,
-        0x68, 0x1b, 0x20, 0xa0,
-    ];
-    if signature[32..] > HALF_ORDER {
+    if signature[32..] > SECP256K1_HALF_ORDER[..] {
         return Err(Error::InvalidSignature);
     }
     Ok(())
@@ -823,11 +812,13 @@ fn decode_der_signature(der: &[u8]) -> Result<[u8; 64], Error> {
     if sequence_len + 2 != der.len() || cursor.read_u8()? != 0x02 {
         return Err(Error::InvalidSignature);
     }
-    let r = cursor.read_slice(usize::from(cursor.read_u8()?))?;
+    let r_len = usize::from(cursor.read_u8()?);
+    let r = cursor.read_slice(r_len)?;
     if cursor.read_u8()? != 0x02 {
         return Err(Error::InvalidSignature);
     }
-    let s = cursor.read_slice(usize::from(cursor.read_u8()?))?;
+    let s_len = usize::from(cursor.read_u8()?);
+    let s = cursor.read_slice(s_len)?;
     if !cursor.is_finished() {
         return Err(Error::InvalidSignature);
     }
@@ -865,11 +856,11 @@ fn decode_der_integer(value: &[u8], output: &mut [u8]) -> Result<(), Error> {
     Ok(())
 }
 
-fn digest_bytes<'a>(
-    result: Option<&'a CryptoOutput>,
+fn digest_bytes(
+    result: Option<&CryptoOutput>,
     algorithm: HashAlgorithm,
     expected_len: usize,
-) -> Result<&'a [u8], Error> {
+) -> Result<&[u8], Error> {
     let Some(CryptoOutput::Digest {
         algorithm: actual,
         bytes,
@@ -883,10 +874,7 @@ fn digest_bytes<'a>(
     Ok(bytes.as_slice())
 }
 
-fn digest32(
-    result: Option<&CryptoOutput>,
-    algorithm: HashAlgorithm,
-) -> Result<[u8; 32], Error> {
+fn digest32(result: Option<&CryptoOutput>, algorithm: HashAlgorithm) -> Result<[u8; 32], Error> {
     let bytes = digest_bytes(result, algorithm, 32)?;
     let mut output = [0_u8; 32];
     output.copy_from_slice(bytes);
@@ -899,7 +887,7 @@ fn push_compact_size<const N: usize>(
 ) -> Result<(), Error> {
     if value < 0xfd {
         output.push(u8::try_from(value).map_err(|_| Error::InvalidCompactSize)?)?;
-    } else if value <= usize::from(u16::MAX) {
+    } else if u16::try_from(value).is_ok() {
         output.push(0xfd)?;
         output.extend_from_slice(
             &u16::try_from(value)
@@ -939,10 +927,7 @@ impl<'a> Cursor<'a> {
 
     fn read_slice(&mut self, len: usize) -> Result<&'a [u8], Error> {
         let end = self.offset.checked_add(len).ok_or(Error::InvalidPsbt)?;
-        let value = self
-            .input
-            .get(self.offset..end)
-            .ok_or(Error::InvalidPsbt)?;
+        let value = self.input.get(self.offset..end).ok_or(Error::InvalidPsbt)?;
         self.offset = end;
         Ok(value)
     }
@@ -963,14 +948,14 @@ impl<'a> Cursor<'a> {
             }
             0xfe => {
                 let value = u32::from_le_bytes(self.read_array::<4>()?);
-                if value <= u32::from(u16::MAX) {
+                if u16::try_from(value).is_ok() {
                     return Err(Error::NonCanonicalCompactSize);
                 }
                 usize::try_from(value).map_err(|_| Error::InvalidCompactSize)
             }
             0xff => {
                 let value = u64::from_le_bytes(self.read_array::<8>()?);
-                if value <= u64::from(u32::MAX) {
+                if u32::try_from(value).is_ok() {
                     return Err(Error::NonCanonicalCompactSize);
                 }
                 usize::try_from(value).map_err(|_| Error::InvalidCompactSize)
@@ -1049,7 +1034,10 @@ mod tests {
         assert_eq!(review.fee, 10_000);
         assert_eq!(review.input_program, [3; 20]);
         assert_eq!(review.output_program, [2; 20]);
-        assert_eq!(Bitcoin::review_plan(&Review::P2wpkh(review)).interaction, Interaction::Confirm);
+        assert_eq!(
+            Bitcoin::review_plan(&Review::P2wpkh(review)).interaction,
+            Interaction::Confirm
+        );
     }
 
     #[test]
@@ -1064,7 +1052,10 @@ mod tests {
         raw[index] = 0x51;
         psbt = BoundedBytes::from_slice(&raw[..psbt.len()]).unwrap();
         let request = Request::SignPsbt { key: key(), psbt };
-        assert_eq!(Bitcoin::prepare_review(&request), Err(Error::UnsupportedScript));
+        assert_eq!(
+            Bitcoin::prepare_review(&request),
+            Err(Error::UnsupportedScript)
+        );
     }
 
     #[test]

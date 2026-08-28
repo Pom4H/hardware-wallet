@@ -5,11 +5,11 @@ use std::{
 };
 
 use hardware_wallet_chain_api::{
-    BoundedBytes, ChainExecution, ChainModule, CryptoOperation, CryptoOutput, Curve,
-    ExecutionStep, HashAlgorithm, PublicKeyFormat, SignatureScheme,
+    BoundedBytes, ChainExecution, ChainModule, CryptoOperation, CryptoOutput, Curve, ExecutionStep,
+    HashAlgorithm, PublicKeyFormat, SignatureScheme,
 };
 use hardware_wallet_chain_bitcoin::{
-    Bitcoin, Request, Response, extract_p2wpkh_witness, MAX_PSBT_BYTES,
+    Bitcoin, MAX_PSBT_BYTES, Request, Response, extract_p2wpkh_witness,
 };
 use hardware_wallet_core::{
     AccountId, AuthId, Event, HostId, HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId,
@@ -37,7 +37,8 @@ fn main() {
     let funded = rpc_call(&signer_rpc, "walletcreatefundedpsbt", &funded_params);
     let psbt_base64 = json_field_string(&funded, "psbt");
     let psbt_bytes = decode_base64(&psbt_base64);
-    let psbt = BoundedBytes::<MAX_PSBT_BYTES>::from_slice(&psbt_bytes).expect("PSBT fits firmware budget");
+    let psbt =
+        BoundedBytes::<MAX_PSBT_BYTES>::from_slice(&psbt_bytes).expect("PSBT fits firmware budget");
 
     let request = Request::SignPsbt {
         key: KeyTarget {
