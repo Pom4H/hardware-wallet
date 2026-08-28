@@ -20,6 +20,25 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Apply compiler fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('crates/chain-bitcoin/src/lib.rs')
+          text = path.read_text()
+          text = text.replace(
+              'if signature[32..] > HALF_ORDER {',
+              'if signature[32..] > HALF_ORDER[..] {',
+          )
+          text = text.replace(
+              '    let r = cursor.read_slice(usize::from(cursor.read_u8()?))?;',
+              '    let r_len = usize::from(cursor.read_u8()?);\n    let r = cursor.read_slice(r_len)?;',
+          )
+          text = text.replace(
+              '    let s = cursor.read_slice(usize::from(cursor.read_u8()?))?;',
+              '    let s_len = usize::from(cursor.read_u8()?);\n    let s = cursor.read_slice(s_len)?;',
+          )
+          path.write_text(text)
       - name: Format
         run: cargo fmt --all
       - name: Clippy
@@ -28,13 +47,9 @@ jobs:
         run: cargo test --workspace
       - name: no_std
         run: cargo check --workspace --no-default-features
-      - name: Commit verified formatting
+      - name: Commit verified patch
         shell: bash
         run: |
-          if git diff --quiet; then
-            echo 'No formatting changes'
-            exit 0
-          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add crates/chain-api crates/chain-bitcoin crates/wallet-core .github/workflows/chains.yml
