@@ -15,15 +15,18 @@ review and cryptographic rules live in isolated modules.
 - create a new wallet and generate key material;
 - recover from mnemonic, Shamir, or a future recovery format;
 - mandatory backup display + verification for newly generated wallets;
+- persistent generated/recovered wallet and backup-verification metadata;
 - PIN setup, retry accounting, optional wipe on exhaustion;
-- optional/required passphrase wallet contexts;
-- host-bound unlock sessions and automatic locking on disconnect/expiry;
-- trusted-host pairing;
+- optional/required passphrase wallets represented by opaque wallet contexts;
+- host- and wallet-context-bound unlock sessions;
+- automatic locking on disconnect/expiry;
+- trusted-host pairing and revocation;
 - address display, public-key export and account creation operations;
 - transaction, message, typed-data, arbitrary-data and custom chain operations;
 - device-owned review before execution;
 - mandatory physical confirmation for every private-key operation;
 - blind-signing policy (disabled by default);
+- physically confirmed, persist-before-apply security settings;
 - cancellation and request-id correlation;
 - PIN change, backup verification and factory reset;
 - runtime failure and tamper handling.
