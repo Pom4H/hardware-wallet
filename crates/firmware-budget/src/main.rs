@@ -27,6 +27,9 @@ use hardware_wallet_key_lifecycle::{
 };
 use panic_halt as _;
 
+#[cfg(feature = "firmverse-probe")]
+mod virtual_device;
+
 const ROOT_BYTES: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -134,26 +137,25 @@ impl Drop for ProbeStore {
 #[entry]
 fn main() -> ! {
     let selector = black_box(0x5a_u8);
-
     #[cfg(feature = "firmverse-probe")]
-    let success = firmverse_self_test(selector);
-
+    {
+        black_box(virtual_device::run(selector));
+        firmverse_done();
+    }
     #[cfg(not(feature = "firmverse-probe"))]
     {
         let result = exercise(selector);
         black_box(result);
     }
-
-    #[cfg(feature = "firmverse-probe")]
-    cortex_m_semihosting::debug::exit(if success {
-        cortex_m_semihosting::debug::EXIT_SUCCESS
-    } else {
-        cortex_m_semihosting::debug::EXIT_FAILURE
-    });
-
     loop {
         cortex_m::asm::nop();
     }
+}
+
+#[cfg(feature = "firmverse-probe")]
+#[inline(never)]
+pub extern "C" fn firmverse_done() {
+    cortex_m::asm::nop();
 }
 
 #[cfg(feature = "firmverse-probe")]

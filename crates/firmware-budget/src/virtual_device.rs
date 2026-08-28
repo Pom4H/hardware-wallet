@@ -23,8 +23,8 @@ const ALL_CAPABILITIES: u32 =
 
 // FVD1 is deliberately an array of atomics: the symbol is writable RAM while
 // the repository-wide `unsafe_code = "forbid"` invariant remains intact.
+#[used]
 #[allow(non_upper_case_globals)]
-#[unsafe(no_mangle)]
 pub static firmverse_device_trace: [AtomicU32; 16] = [
     AtomicU32::new(FVD1_MAGIC),
     AtomicU32::new(FVD1_VERSION),

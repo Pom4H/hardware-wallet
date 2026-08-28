@@ -10,7 +10,7 @@ build = "build.rs"
 [features]
 default = []
 embedded-probe = []
-firmverse-probe = ["embedded-probe", "dep:cortex-m-semihosting"]
+firmverse-probe = ["embedded-probe"]
 
 [[bin]]
 name = "hardware-wallet-firmware-budget"
@@ -22,7 +22,6 @@ bench = false
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
-cortex-m-semihosting = { version = "0.3.7", optional = true }
 panic-halt = "0.2"
 hardware-wallet-core = { path = "../wallet-core" }
 hardware-wallet-chain-api = { path = "../chain-api" }
