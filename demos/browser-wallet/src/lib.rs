@@ -75,7 +75,7 @@ impl Frame {
         output[6] = u8::from(self.state.signing_active())
             | (u8::from(self.session_unlocked) << 1)
             | (u8::from(self.state.review_active()) << 2)
-            | (1 << 3); // display is powered
+            | (1 << 3);
         output[7] = self.sequence;
 
         let mut cursor = 8;
@@ -200,7 +200,7 @@ impl WalletDemo {
             id: AUTH,
             host: HOST,
         });
-        if self.last_effect != Effect::ResolveHostTrust { id: AUTH, host: HOST } {
+        if self.last_effect != (Effect::ResolveHostTrust { id: AUTH, host: HOST }) {
             self.set_screen(ScreenState::Error);
             return;
         }
