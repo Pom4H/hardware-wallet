@@ -76,14 +76,15 @@ pub(super) fn review_prepared(
         );
     }
 
-    if uses_private_key && state.policy().signing_hosts == SigningHostPolicy::TrustedOnly {
-        if session.trust != HostTrust::Trusted {
-            return reject_operation(
-                state.with_flow(FlowState::Idle),
-                actual,
-                RejectReason::UntrustedHost,
-            );
-        }
+    if uses_private_key
+        && state.policy().signing_hosts == SigningHostPolicy::TrustedOnly
+        && session.trust != HostTrust::Trusted
+    {
+        return reject_operation(
+            state.with_flow(FlowState::Idle),
+            actual,
+            RejectReason::UntrustedHost,
+        );
     }
 
     pending.kind = Some(plan.kind);
