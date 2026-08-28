@@ -20,15 +20,25 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Apply compiler fixes
+      - name: Apply compiler and lint fixes
         shell: python
         run: |
           from pathlib import Path
           path = Path('crates/chain-bitcoin/src/lib.rs')
           text = path.read_text()
+
+          text = text.replace(
+              'const SIGHASH_ALL: u32 = 1;',
+              '''const SIGHASH_ALL: u32 = 1;\nconst SECP256K1_HALF_ORDER: [u8; 32] = [\n    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,\n    0xff, 0x5d, 0x57, 0x6e, 0x73, 0x57, 0xa4, 0x50, 0x1d, 0xdf, 0xe9, 0x2f, 0x46, 0x68, 0x1b,\n    0x20, 0xa0,\n];''',
+              1,
+          )
           text = text.replace(
               'if signature[32..] > HALF_ORDER {',
-              'if signature[32..] > HALF_ORDER[..] {',
+              'if signature[32..] > SECP256K1_HALF_ORDER[..] {',
+          )
+          text = text.replace(
+              '''    const HALF_ORDER: [u8; 32] = [\n        0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,\n        0xff, 0xff, 0x5d, 0x57, 0x6e, 0x73, 0x57, 0xa4, 0x50, 0x1d, 0xdf, 0xe9, 0x2f, 0x46,\n        0x68, 0x1b, 0x20, 0xa0,\n    ];\n''',
+              '',
           )
           text = text.replace(
               '    let r = cursor.read_slice(usize::from(cursor.read_u8()?))?;',
@@ -37,6 +47,28 @@ jobs:
           text = text.replace(
               '    let s = cursor.read_slice(usize::from(cursor.read_u8()?))?;',
               '    let s_len = usize::from(cursor.read_u8()?);\n    let s = cursor.read_slice(s_len)?;',
+          )
+          text = text.replace('exact supported SegWit', 'exact supported `SegWit`')
+          text = text.replace(
+              "fn digest_bytes<'a>(\n    result: Option<&'a CryptoOutput>,",
+              'fn digest_bytes(\n    result: Option<&CryptoOutput>,',
+          )
+          text = text.replace(
+              ") -> Result<&'a [u8], Error> {",
+              ') -> Result<&[u8], Error> {',
+              1,
+          )
+          text = text.replace(
+              '} else if value <= usize::from(u16::MAX) {',
+              '} else if u16::try_from(value).is_ok() {',
+          )
+          text = text.replace(
+              'if value <= u32::from(u16::MAX) {',
+              'if u16::try_from(value).is_ok() {',
+          )
+          text = text.replace(
+              'if value <= u64::from(u32::MAX) {',
+              'if u32::try_from(value).is_ok() {',
           )
           path.write_text(text)
       - name: Format
