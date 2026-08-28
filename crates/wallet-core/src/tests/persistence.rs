@@ -46,3 +46,56 @@ fn policy_survives_reboot() {
     let snapshot = empty.persistent_snapshot().expect("empty snapshot");
     assert_eq!(State::restore(snapshot).policy(), policy);
 }
+
+#[test]
+fn reboot_discards_confirmed_but_unpersisted_setting_change() {
+    let id = SettingsId(40);
+    let change = SettingChange::Security(SecuritySetting::BlindSigning(BlindSigningPolicy::Allow));
+    let state = unlocked_state(HostTrust::Trusted);
+    let snapshot = state
+        .persistent_snapshot()
+        .expect("provisioned wallet snapshot");
+
+    let state = update(
+        state,
+        Event::SettingChangeRequested {
+            id,
+            host: HostId(7),
+            change,
+        },
+    )
+    .state;
+    let state = update(state, Event::SettingChangeConfirmed(id)).state;
+    assert_eq!(state.policy().blind_signing, BlindSigningPolicy::Deny);
+
+    let restored = State::restore(snapshot);
+    let stale = update(restored, Event::SettingChangePersisted(id));
+    assert_eq!(stale.effect, Effect::Reject(RejectReason::InvalidState));
+    assert_eq!(
+        stale.state.policy().blind_signing,
+        BlindSigningPolicy::Deny
+    );
+}
+
+#[test]
+fn reboot_discards_inflight_operation_and_its_completion_callback() {
+    let operation = OperationId(41);
+    let state = unlocked_state(HostTrust::Trusted);
+    let snapshot = state
+        .persistent_snapshot()
+        .expect("provisioned wallet snapshot");
+    let state = update(
+        state,
+        Event::OperationRequested {
+            id: operation,
+            host: HostId(7),
+        },
+    )
+    .state;
+    assert!(matches!(state.flow(), FlowState::Operation(_)));
+
+    let restored = State::restore(snapshot);
+    let stale = update(restored, Event::OperationCompleted(operation));
+    assert_eq!(stale.effect, Effect::Reject(RejectReason::InvalidState));
+    assert_eq!(stale.state.flow(), FlowState::Idle);
+}
