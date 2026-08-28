@@ -39,7 +39,7 @@ jobs:
 
       # Pin the external sandbox to an exact green commit, never to main.
       - name: Start local chain
-        uses: Pom4H/chain-sandbox@e7e662124133042c8aae5dc412799d4b725e0749
+        uses: Pom4H/chain-sandbox@18d8fca3cc072a0199adbdf4eeeccc27e53b7556
         with:
           chain: ${{ matrix.chain }}
 
@@ -69,3 +69,7 @@ jobs:
 
       - name: Run chain crate tests
         run: cargo test -p "${{ matrix.package }}"
+
+      - name: Run Ethereum signed-transaction e2e
+        if: matrix.chain == 'ethereum'
+        run: cargo run -p hardware-wallet-chain-ethereum --example e2e

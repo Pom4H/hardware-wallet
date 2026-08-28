@@ -2,8 +2,8 @@
 
 use hardware_wallet_chain_api::{
     BoundedBytes, ChainExecution, ChainId, ChainModule, CryptoOperation, CryptoOutput,
-    ExecutionContext, ExecutionStep, Interaction, KeyTarget, OperationKind, PublicKeyFormat,
-    ReviewAssurance, ReviewPlan, MAX_PUBLIC_KEY_BYTES,
+    ExecutionContext, ExecutionStep, Interaction, KeyTarget, MAX_PUBLIC_KEY_BYTES, OperationKind,
+    PublicKeyFormat, ReviewAssurance, ReviewPlan,
 };
 
 pub struct Bitcoin;
