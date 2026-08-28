@@ -1,0 +1,36 @@
+name: Store docs once
+
+on:
+  push:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Document store errors
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('crates/key-lifecycle/src/lib.rs')
+          s = p.read_text()
+          s = s.replace(
+              '    fn persist_root(&mut self, root: &[u8]) -> Result<(), Self::Error>;\n    fn load_root(',
+              '    /// # Errors\n    ///\n    /// Returns a storage error if the root cannot be committed durably.\n    fn persist_root(&mut self, root: &[u8]) -> Result<(), Self::Error>;\n\n    /// # Errors\n    ///\n    /// Returns a storage error if the root cannot be read or authenticated.\n    fn load_root(',
+              1,
+          )
+          p.write_text(s)
+          PY
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add crates/key-lifecycle/src/lib.rs
+          git commit -m "Document root secret store errors"
+          git push
