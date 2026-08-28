@@ -4,6 +4,7 @@ mod auth;
 mod maintenance;
 mod operations;
 mod provisioning;
+mod settings;
 
 fn provisioned_state(passphrase: PassphraseMode) -> State {
     let setup = SetupId(1);
@@ -25,6 +26,10 @@ fn provisioned_state(passphrase: PassphraseMode) -> State {
 }
 
 fn unlocked_state(trust: HostTrust) -> State {
+    unlocked_state_with_wallet(trust, WalletContextId(1))
+}
+
+fn unlocked_state_with_wallet(trust: HostTrust, wallet: WalletContextId) -> State {
     let host = HostId(7);
     let auth = AuthId(2);
     let session = SessionId(3);
@@ -40,5 +45,13 @@ fn unlocked_state(trust: HostTrust) -> State {
     )
     .state;
     state = update(state, Event::PinVerified(auth)).state;
-    update(state, Event::SessionOpened { auth, session }).state
+    update(
+        state,
+        Event::SessionOpened {
+            auth,
+            session,
+            wallet,
+        },
+    )
+    .state
 }
