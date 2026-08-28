@@ -3,8 +3,8 @@
 use hardware_wallet_chain_api::{
     BoundedBytes, CapacityError, ChainExecution, ChainId, ChainModule, CryptoOperation,
     CryptoOutput, ExecutionContext, ExecutionStep, HashAlgorithm, Interaction, KeyTarget,
-    OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan, SignatureScheme,
-    MAX_PUBLIC_KEY_BYTES,
+    MAX_PUBLIC_KEY_BYTES, OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan,
+    SignatureScheme,
 };
 
 pub struct Solana;
@@ -48,10 +48,7 @@ impl TransferReview {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Review {
-    PublicKey {
-        kind: OperationKind,
-        key: KeyTarget,
-    },
+    PublicKey { kind: OperationKind, key: KeyTarget },
     SystemTransfer(TransferReview),
 }
 
@@ -159,11 +156,7 @@ impl ChainExecution for Execution {
                     self.stage = ExecutionStage::Finished;
                     Ok(ExecutionStep::Complete(Response::PublicKey(bytes.clone())))
                 }
-                ExecutionKind::SystemTransfer {
-                    key,
-                    signer,
-                    ..
-                } => {
+                ExecutionKind::SystemTransfer { key, signer, .. } => {
                     let Some(CryptoOutput::PublicKey { format, bytes }) = result else {
                         return Err(Error::UnexpectedCryptoResult);
                     };
@@ -191,9 +184,7 @@ impl ChainExecution for Execution {
                 else {
                     return Err(Error::UnexpectedCryptoResult);
                 };
-                if *scheme != SignatureScheme::Ed25519
-                    || bytes.len() != 64
-                    || recovery_id.is_some()
+                if *scheme != SignatureScheme::Ed25519 || bytes.len() != 64 || recovery_id.is_some()
                 {
                     return Err(Error::InvalidSignature);
                 }
@@ -240,9 +231,9 @@ impl ChainModule for Solana {
                 kind: OperationKind::ExportPublicKey,
                 key: *key,
             }),
-            Request::SignSystemTransfer { key, message } => {
-                Ok(Review::SystemTransfer(parse_system_transfer(*key, message)?))
-            }
+            Request::SignSystemTransfer { key, message } => Ok(Review::SystemTransfer(
+                parse_system_transfer(*key, message)?,
+            )),
             Request::SignMessage | Request::SignTransaction => Err(Error::ParserNotImplemented),
         }
     }
@@ -379,10 +370,7 @@ fn parse_system_transfer(
     })
 }
 
-fn push_shortvec<const N: usize>(
-    output: &mut BoundedBytes<N>,
-    value: usize,
-) -> Result<(), Error> {
+fn push_shortvec<const N: usize>(output: &mut BoundedBytes<N>, value: usize) -> Result<(), Error> {
     let mut remaining = u16::try_from(value).map_err(|_| Error::ShortVecOverflow)?;
     loop {
         let mut byte = u8::try_from(remaining & 0x7f).map_err(|_| Error::ShortVecOverflow)?;
@@ -474,7 +462,8 @@ mod tests {
             key: key(),
             message: fixture(),
         };
-        let Review::SystemTransfer(review) = Solana::prepare_review(&request).expect("valid transfer")
+        let Review::SystemTransfer(review) =
+            Solana::prepare_review(&request).expect("valid transfer")
         else {
             panic!("wrong review")
         };
@@ -500,7 +489,10 @@ mod tests {
             key: key(),
             message: raw,
         };
-        assert_eq!(Solana::prepare_review(&request), Err(Error::UnsupportedProgram));
+        assert_eq!(
+            Solana::prepare_review(&request),
+            Err(Error::UnsupportedProgram)
+        );
     }
 
     #[test]
@@ -511,11 +503,9 @@ mod tests {
         };
         let review = Solana::prepare_review(&request).expect("review");
         let state = crate_test_unlocked_state();
-        let mut execution = Solana::prepare_execution(
-            &review,
-            state.execution_context().expect("unlocked"),
-        )
-        .expect("execution");
+        let mut execution =
+            Solana::prepare_execution(&review, state.execution_context().expect("unlocked"))
+                .expect("execution");
         assert!(matches!(
             execution.next(None).expect("derive step"),
             ExecutionStep::Crypto(CryptoOperation::DerivePublicKey { .. })

@@ -4,9 +4,7 @@ use hardware_wallet_chain_api::{
     BoundedBytes, ChainExecution, ChainModule, CryptoOperation, CryptoOutput, ExecutionStep,
     HashAlgorithm, PublicKeyFormat, SignatureScheme,
 };
-use hardware_wallet_chain_solana::{
-    Solana, Request, Response, encode_system_transfer,
-};
+use hardware_wallet_chain_solana::{Request, Response, Solana, encode_system_transfer};
 use hardware_wallet_core::{
     AccountId, AuthId, Event, HostId, HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId,
     SetupId, State, WalletContextId, update,
@@ -16,7 +14,8 @@ const RECIPIENT: &str = "GcQfK48DV9BzDuDeCyV2sShbAAY4vqmK8JSj1NBrwoVZ";
 
 fn main() {
     let rpc = env::var("SOLANA_RPC_URL").expect("SOLANA_RPC_URL from chain-sandbox");
-    let signer_text = env::var("SOLANA_TEST_PUBKEY").expect("SOLANA_TEST_PUBKEY from chain-sandbox");
+    let signer_text =
+        env::var("SOLANA_TEST_PUBKEY").expect("SOLANA_TEST_PUBKEY from chain-sandbox");
     let keypair = env::var("SOLANA_TEST_KEYPAIR").expect("SOLANA_TEST_KEYPAIR from chain-sandbox");
     let cli = env::var("SOLANA_CLI").expect("SOLANA_CLI from chain-sandbox");
 
@@ -67,13 +66,8 @@ fn main() {
     assert_eq!(prehash, HashAlgorithm::None);
     assert_eq!(execution.payload(payload), Some(message.as_slice()));
 
-    let reference_signature = reference_signature(
-        &cli,
-        &rpc,
-        &keypair,
-        &signer_text,
-        &blockhash_text,
-    );
+    let reference_signature =
+        reference_signature(&cli, &rpc, &keypair, &signer_text, &blockhash_text);
     let signature_bytes = decode_base58::<64>(&reference_signature);
     let crypto_signature = CryptoOutput::Signature {
         scheme: SignatureScheme::Ed25519,
@@ -268,7 +262,7 @@ fn decode_base58<const N: usize>(value: &str) -> [u8; N] {
             .iter()
             .position(|candidate| *candidate == character)
             .unwrap_or_else(|| panic!("invalid base58 character"));
-        let mut carry = digit as u32;
+        let mut carry = u32::try_from(digit).expect("base58 alphabet index fits u32");
         for byte in output.iter_mut().rev() {
             let accumulator = u32::from(*byte) * 58 + carry;
             *byte = (accumulator & 0xff) as u8;
@@ -280,8 +274,7 @@ fn decode_base58<const N: usize>(value: &str) -> [u8; N] {
 }
 
 fn encode_base64(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let a = chunk[0];
