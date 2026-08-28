@@ -3,7 +3,9 @@ use super::*;
 #[test]
 fn reboot_restores_wallet_locked_and_drops_transient_session() {
     let state = unlocked_state_with_wallet(HostTrust::Trusted, WalletContextId(77));
-    let snapshot = state.persistent_snapshot().expect("provisioned wallet snapshot");
+    let snapshot = state
+        .persistent_snapshot()
+        .expect("provisioned wallet snapshot");
     let restored = State::restore(snapshot);
 
     assert_eq!(restored.wallet_metadata(), state.wallet_metadata());
@@ -25,7 +27,11 @@ fn provisioning_and_wiping_are_not_snapshotable() {
     .state;
     assert_eq!(provisioning.persistent_snapshot(), None);
 
-    let wiping = update(provisioned_state(PassphraseMode::Disabled), Event::TamperDetected).state;
+    let wiping = update(
+        provisioned_state(PassphraseMode::Disabled),
+        Event::TamperDetected,
+    )
+    .state;
     assert_eq!(wiping.lifecycle(), Lifecycle::Wiping);
     assert_eq!(wiping.persistent_snapshot(), None);
 }
