@@ -10,5 +10,6 @@ fn main() {
     fs::write(output.join("memory.x"), include_bytes!("memory.x"))
         .expect("write generic probe memory layout");
     println!("cargo:rustc-link-search={}", output.display());
+    // cortex-m-rt supplies link.x; memory.x above supplies only the generic regions.
     println!("cargo:rustc-link-arg-bin=hardware-wallet-firmware-budget=-Tlink.x");
 }
