@@ -1,0 +1,30 @@
+name: Inspect Bitcoin PSBT
+
+on:
+  push:
+    paths:
+      - .github/workflows/inspect-bitcoin-psbt.yml
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Bitcoin regtest
+        uses: Pom4H/chain-sandbox@fd34c73ddfb1509bd5c09020c6140918733cde0f
+        with:
+          chain: bitcoin
+      - name: Decode funded PSBT
+        shell: bash
+        run: |
+          destination=$(docker exec chain-sandbox-bitcoin \
+            bitcoin-cli -regtest -rpcuser=chain -rpcpassword=sandbox -rpcwallet=sandbox \
+            getnewaddress '' bech32)
+          psbt=$(docker exec chain-sandbox-bitcoin \
+            bitcoin-cli -regtest -rpcuser=chain -rpcpassword=sandbox -rpcwallet=signer \
+            -named walletcreatefundedpsbt inputs='[]' outputs="[{\"$destination\":1.0}]" \
+            locktime=0 options='{"add_inputs":true,"subtractFeeFromOutputs":[0],"replaceable":false}' \
+            bip32derivs=true | python3 -c 'import json,sys; print(json.load(sys.stdin)["psbt"])')
+          echo '--- decoded PSBT ---'
+          docker exec chain-sandbox-bitcoin \
+            bitcoin-cli -regtest -rpcuser=chain -rpcpassword=sandbox decodepsbt "$psbt"
