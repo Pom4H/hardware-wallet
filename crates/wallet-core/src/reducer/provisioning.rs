@@ -1,6 +1,6 @@
 use crate::{
-    AuthState, Effect, FlowState, Lifecycle, PassphraseMode, ProvisioningMode, ProvisioningStage,
-    RejectReason, State, Transition,
+    AuthState, BackupStatus, Effect, FlowState, Lifecycle, PassphraseMode, ProvisioningMode,
+    ProvisioningStage, RejectReason, State, Transition, WalletMetadata, WalletOrigin,
 };
 
 use super::common::reject;
@@ -148,9 +148,9 @@ pub(super) fn pin_configured(state: State, actual: crate::SetupId) -> Transition
 pub(super) fn provisioning_persisted(state: State, actual: crate::SetupId) -> Transition {
     let Lifecycle::Provisioning {
         id,
+        mode,
         passphrase,
         stage: ProvisioningStage::Persisting,
-        ..
     } = state.lifecycle()
     else {
         return reject(state, RejectReason::InvalidState);
@@ -159,8 +159,21 @@ pub(super) fn provisioning_persisted(state: State, actual: crate::SetupId) -> Tr
         return reject(state, RejectReason::CorrelationMismatch);
     }
 
+    let metadata = match mode {
+        ProvisioningMode::Create => WalletMetadata {
+            origin: WalletOrigin::Generated,
+            backup: BackupStatus::Verified,
+            passphrase,
+        },
+        ProvisioningMode::Recover(format) => WalletMetadata {
+            origin: WalletOrigin::Recovered(format),
+            backup: BackupStatus::RecoverySource,
+            passphrase,
+        },
+    };
+
     let next = state
-        .with_lifecycle(Lifecycle::Provisioned { passphrase })
+        .with_lifecycle(Lifecycle::Provisioned { metadata })
         .with_auth(AuthState::Locked { failed_attempts: 0 })
         .with_flow(FlowState::Idle);
     Transition::new(next, Effect::ProvisioningComplete(id))

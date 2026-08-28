@@ -1,5 +1,6 @@
 use crate::{
-    AuthState, Effect, FlowState, Lifecycle, MaintenanceKind, RejectReason, State, Transition,
+    AuthState, BackupStatus, Effect, FlowState, Lifecycle, MaintenanceKind, RejectReason, State,
+    Transition,
 };
 
 use super::common::{reject, unlocked_session};
@@ -54,7 +55,14 @@ pub(super) fn backup_check_completed(
 
     let state = state.with_flow(FlowState::Idle);
     if valid {
-        Transition::new(state, Effect::MaintenanceComplete(id))
+        let Some(mut metadata) = state.wallet_metadata() else {
+            return reject(state, RejectReason::NotProvisioned);
+        };
+        metadata.backup = BackupStatus::Verified;
+        Transition::new(
+            state.with_lifecycle(Lifecycle::Provisioned { metadata }),
+            Effect::MaintenanceComplete(id),
+        )
     } else {
         Transition::new(state, Effect::ReportBackupInvalid(id))
     }

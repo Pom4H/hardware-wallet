@@ -22,6 +22,17 @@ fn create_requires_backup_verification_before_pin() {
 
     let transition = update(transition.state, Event::BackupVerified(setup));
     assert_eq!(transition.effect, Effect::ConfigurePin(setup));
+
+    let transition = update(transition.state, Event::PinConfigured(setup));
+    let transition = update(transition.state, Event::ProvisioningPersisted(setup));
+    assert_eq!(
+        transition.state.wallet_metadata(),
+        Some(WalletMetadata {
+            origin: WalletOrigin::Generated,
+            backup: BackupStatus::Verified,
+            passphrase: PassphraseMode::Disabled,
+        })
+    );
 }
 
 #[test]
@@ -50,4 +61,15 @@ fn recovery_skips_new_backup_and_configures_pin() {
 
     let transition = update(transition.state, Event::KeyMaterialReady(setup));
     assert_eq!(transition.effect, Effect::ConfigurePin(setup));
+
+    let transition = update(transition.state, Event::PinConfigured(setup));
+    let transition = update(transition.state, Event::ProvisioningPersisted(setup));
+    assert_eq!(
+        transition.state.wallet_metadata(),
+        Some(WalletMetadata {
+            origin: WalletOrigin::Recovered(RecoveryFormat::Mnemonic),
+            backup: BackupStatus::RecoverySource,
+            passphrase: PassphraseMode::Optional,
+        })
+    );
 }
