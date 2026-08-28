@@ -6,6 +6,7 @@ on:
       - .github/workflows/chains.yml
       - crates/chain-api/**
       - crates/crypto-runtime/**
+      - crates/hd-key-backend/**
       - crates/chain-bitcoin/**
       - crates/chain-ethereum/**
       - crates/chain-solana/**
@@ -14,6 +15,7 @@ on:
       - .github/workflows/chains.yml
       - crates/chain-api/**
       - crates/crypto-runtime/**
+      - crates/hd-key-backend/**
       - crates/chain-bitcoin/**
       - crates/chain-ethereum/**
       - crates/chain-solana/**
@@ -39,8 +41,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # Exact commit: local nodes expose RPC/faucet capabilities only. Wallet
+      # keys and signing material are derived entirely by this repository.
       - name: Start local chain
-        uses: Pom4H/chain-sandbox@fd34c73ddfb1509bd5c09020c6140918733cde0f
+        uses: Pom4H/chain-sandbox@7bdf7388677b394e6cf94b7e65dfe3bffc2d778d
         with:
           chain: ${{ matrix.chain }}
 
@@ -52,10 +56,7 @@ jobs:
               curl --fail --silent --show-error \
                 --header 'content-type: text/plain;' \
                 --data-binary '{"jsonrpc":"1.0","id":"wallet","method":"getblockcount","params":[]}' \
-                "$BITCOIN_RPC_URL" | grep -q '"result":102'
-              test "$BITCOIN_TEST_PUBKEY" = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
-              test -n "$BITCOIN_TEST_ADDRESS"
-              test "$BITCOIN_SIGNER_WALLET" = 'signer'
+                "$BITCOIN_RPC_URL" | grep -q '"result":101'
               ;;
             ethereum)
               curl --fail --silent --show-error \
@@ -68,7 +69,6 @@ jobs:
                 --header 'content-type: application/json' \
                 --data-binary '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
                 "$SOLANA_RPC_URL" | grep -q '"ok"'
-              test "$SOLANA_TEST_PUBKEY" = '9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj'
               test -x "$SOLANA_CLI"
               ;;
           esac
@@ -76,14 +76,14 @@ jobs:
       - name: Run chain crate tests
         run: cargo test -p "${{ matrix.package }}"
 
-      - name: Run Bitcoin crypto-runtime e2e
+      - name: Run Bitcoin HD e2e
         if: matrix.chain == 'bitcoin'
         run: cargo run -p hardware-wallet-chain-bitcoin --example bitcoin_e2e
 
-      - name: Run Ethereum crypto-runtime e2e
+      - name: Run Ethereum HD e2e
         if: matrix.chain == 'ethereum'
         run: cargo run -p hardware-wallet-chain-ethereum --example ethereum_e2e
 
-      - name: Run Solana crypto-runtime e2e
+      - name: Run Solana HD e2e
         if: matrix.chain == 'solana'
         run: cargo run -p hardware-wallet-chain-solana --example solana_e2e
