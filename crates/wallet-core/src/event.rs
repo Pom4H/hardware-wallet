@@ -1,6 +1,6 @@
 use crate::{
     AuthId, HostId, HostTrust, MaintenanceId, OperationId, PairingId, PassphraseMode,
-    RecoveryFormat, ReviewPlan, SessionId, SetupId,
+    RecoveryFormat, ReviewPlan, SessionId, SettingChange, SettingsId, SetupId, WalletContextId,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,6 +33,7 @@ pub enum Event {
     SessionOpened {
         auth: AuthId,
         session: SessionId,
+        wallet: WalletContextId,
     },
     LockRequested,
     SessionExpired(SessionId),
@@ -60,6 +61,15 @@ pub enum Event {
     OperationCompleted(OperationId),
     OperationFailed(OperationId),
     OperationCancelled(OperationId),
+
+    SettingChangeRequested {
+        id: SettingsId,
+        host: HostId,
+        change: SettingChange,
+    },
+    SettingChangeConfirmed(SettingsId),
+    SettingChangeRejected(SettingsId),
+    SettingChangePersisted(SettingsId),
 
     ChangePinRequested {
         id: MaintenanceId,
