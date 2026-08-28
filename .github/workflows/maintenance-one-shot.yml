@@ -41,53 +41,25 @@ jobs:
               'parse_typed_list(bytes, EIP1559_UNSIGNED_FIELDS).expect("fixture parses")',
               'parse_typed_list::<EIP1559_UNSIGNED_FIELDS>(bytes).expect("fixture parses")',
           )
-          text = text.replace(
-              'fn parse_typed_list<const N: usize>(raw: &[u8], expected: usize) -> Result<[RlpItem<\'_>; N], Error> {\n    if expected != N || raw.first() != Some(&EIP1559_TYPE) {',
-              'fn parse_typed_list<const N: usize>(raw: &[u8]) -> Result<[RlpItem<\'_>; N], Error> {\n    if raw.first() != Some(&EIP1559_TYPE) {',
-          )
-          lib.write_text(text)
+          old_signature = "fn parse_typed_list<const N: usize>(raw: &[u8], expected: usize) -> Result<[RlpItem<'_>; N], Error> {\n    if expected != N || raw.first() != Some(&EIP1559_TYPE) {"
+          new_signature = "fn parse_typed_list<const N: usize>(raw: &[u8]) -> Result<[RlpItem<'_>; N], Error> {\n    if raw.first() != Some(&EIP1559_TYPE) {"
+          if old_signature not in text:
+              raise SystemExit('expected parse_typed_list signature not found')
+          lib.write_text(text.replace(old_signature, new_signature))
 
           example = Path('crates/chain-ethereum/examples/e2e.rs')
           text = example.read_text()
-          old = '''    let sign_request = format!(
-              concat!(
-                  "{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":1,\\\"method\\\":\\\"eth_signTransaction\\\",\\\"params\\\":[{",
-                  "\\\"type\\\":\\\"0x2\\\",",
-                  "\\\"from\\\":\\\"{}\\\",",
-                  "\\\"to\\\":\\\"{}\\\",",
-                  "\\\"nonce\\\":\\\"0x0\\\",",
-                  "\\\"value\\\":\\\"0x1\\\",",
-                  "\\\"gas\\\":\\\"0x5208\\\",",
-                  "\\\"maxPriorityFeePerGas\\\":\\\"0x3b9aca00\\\",",
-                  "\\\"maxFeePerGas\\\":\\\"0x77359400\\\",",
-                  "\\\"chainId\\\":\\\"0x7a69\\\",",
-                  "\\\"data\\\":\\\"0x\\\",",
-                  "\\\"accessList\\\":[]",
-                  "}]}}"
-              ),
-              FIRST_ACCOUNT, SECOND_ACCOUNT
-          );'''
-          new = '''    let sign_request = format!(
-              concat!(
-                  "{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":1,\\\"method\\\":\\\"eth_signTransaction\\\",\\\"params\\\":[{{",
-                  "\\\"type\\\":\\\"0x2\\\",",
-                  "\\\"from\\\":\\\"{}\\\",",
-                  "\\\"to\\\":\\\"{}\\\",",
-                  "\\\"nonce\\\":\\\"0x0\\\",",
-                  "\\\"value\\\":\\\"0x1\\\",",
-                  "\\\"gas\\\":\\\"0x5208\\\",",
-                  "\\\"maxPriorityFeePerGas\\\":\\\"0x3b9aca00\\\",",
-                  "\\\"maxFeePerGas\\\":\\\"0x77359400\\\",",
-                  "\\\"chainId\\\":\\\"0x7a69\\\",",
-                  "\\\"data\\\":\\\"0x\\\",",
-                  "\\\"accessList\\\":[]",
-                  "}}]}}"
-              ),
-              FIRST_ACCOUNT, SECOND_ACCOUNT
-          );'''
-          if old not in text:
-              raise SystemExit('expected eth_signTransaction block not found')
-          example.write_text(text.replace(old, new))
+          start = text.index('    let sign_request = format!(')
+          end = text.index('\n    let signed_by_anvil', start)
+          replacement = '''    let sign_request = [
+              "{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":1,\\\"method\\\":\\\"eth_signTransaction\\\",\\\"params\\\":[{\\\"type\\\":\\\"0x2\\\",\\\"from\\\":\\\"",
+              FIRST_ACCOUNT,
+              "\\\",\\\"to\\\":\\\"",
+              SECOND_ACCOUNT,
+              "\\\",\\\"nonce\\\":\\\"0x0\\\",\\\"value\\\":\\\"0x1\\\",\\\"gas\\\":\\\"0x5208\\\",\\\"maxPriorityFeePerGas\\\":\\\"0x3b9aca00\\\",\\\"maxFeePerGas\\\":\\\"0x77359400\\\",\\\"chainId\\\":\\\"0x7a69\\\",\\\"data\\\":\\\"0x\\\",\\\"accessList\\\":[]}]}"
+          ]
+          .concat();'''
+          example.write_text(text[:start] + replacement + text[end:])
 
       - name: Format
         run: cargo fmt --all
