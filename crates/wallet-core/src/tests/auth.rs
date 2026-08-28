@@ -2,7 +2,10 @@ use super::*;
 
 fn begin_unlock(state: State, auth: AuthId, host: HostId, trust: HostTrust) -> State {
     let transition = update(state, Event::UnlockRequested { id: auth, host });
-    assert_eq!(transition.effect, Effect::ResolveHostTrust { id: auth, host });
+    assert_eq!(
+        transition.effect,
+        Effect::ResolveHostTrust { id: auth, host }
+    );
     let transition = update(
         transition.state,
         Event::HostTrustResolved { id: auth, trust },
@@ -106,7 +109,10 @@ fn stale_retry_count_is_rejected() {
             failed_attempts: 4,
         },
     );
-    assert_eq!(transition.effect, Effect::Reject(RejectReason::InvalidState));
+    assert_eq!(
+        transition.effect,
+        Effect::Reject(RejectReason::InvalidState)
+    );
 }
 
 #[test]
@@ -138,7 +144,10 @@ fn host_cannot_supply_its_own_trust_level() {
         transition.state.auth(),
         AuthState::ResolvingHost { .. }
     ));
-    assert_eq!(transition.effect, Effect::ResolveHostTrust { id: auth, host });
+    assert_eq!(
+        transition.effect,
+        Effect::ResolveHostTrust { id: auth, host }
+    );
 }
 
 #[test]
