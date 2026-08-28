@@ -7,29 +7,31 @@ trusted core owns generic wallet behavior — provisioning, authorization, sessi
 accounts, key locators, user approval, security policy and operation lifecycle — while
 chain-specific parsing, review and cryptographic rules live in isolated modules.
 
-> **Status:** architecture and domain implementation in progress. Do not use this
-> project to protect real funds.
+> **Status:** the domain and three narrow reference chain flows are implemented and
+> exercised end-to-end in CI. The project is still experimental and must not be used
+> to protect real funds.
 
-## What the core already models
+## What the core models
 
 - create a new wallet and generate key material;
 - recover from mnemonic, Shamir, or a future recovery format;
 - mandatory backup display + verification for newly generated wallets;
 - persistent generated/recovered wallet and backup-verification metadata;
-- PIN setup, retry accounting, optional wipe on exhaustion;
+- PIN setup with durable monotonic retry accounting and optional wipe on exhaustion;
+- reboot-safe restoration that always returns provisioned wallets to a locked state;
 - optional/required passphrase wallets represented by opaque wallet contexts;
 - host- and wallet-context-bound unlock sessions;
+- device-owned trusted-host resolution, pairing and revocation;
 - automatic locking on disconnect/expiry;
-- trusted-host pairing and revocation;
 - account identifiers and fixed-capacity hierarchical derivation paths;
-- generic public-key and signing operations across multiple crypto schemes;
+- generic derive/hash/sign crypto operations across multiple schemes;
 - address display, public-key export and account creation operations;
 - transaction, message, typed-data, arbitrary-data and custom chain operations;
 - device-owned review before execution;
 - mandatory physical confirmation for every private-key operation;
 - blind-signing policy (disabled by default);
 - physically confirmed, persist-before-apply security settings;
-- cancellation and request-id correlation;
+- cancellation, request correlation and stale-callback rejection after lock/reboot;
 - PIN change, backup verification and factory reset;
 - runtime failure and tamper handling.
 
@@ -45,34 +47,60 @@ untrusted host request
  chain-specific parser
         │
         ├── human review
-        ├── ReviewPlan
-        └── execution plan
+        └── ReviewPlan
               │
               ▼
       Hardware Wallet Core
       State + Event -> State + Effect
               │
-       ┌──────┼───────────┐
-       ▼      ▼           ▼
-      UI   crypto ops   persistence
-             │
-             ├── derive public key
-             └── sign
+              ▼
+      approved ChainExecution
+              │
+      ┌───────┼────────┐
+      ▼       ▼        ▼
+ derive     hash      sign
+ pubkey               payload
+      │       │        │
+      └───────┼────────┘
+              ▼
+       isolated runtime
 ```
 
+`ChainExecution` is intentionally multi-step. A chain can derive and validate the
+actual wallet public key, hash protocol-specific payloads, and only then request a
+signature. Raw transactions and messages stay outside `wallet-core::State`.
+
 The core must never contain `if chain == bitcoin` / `if chain == ethereum` branches.
-It also never stores secret bytes or accepts a host-provided signing digest as trusted
-input.
+It never stores seed, PIN, passphrase, private key or raw transaction bytes, and it
+never accepts a host-provided signing digest as trusted input.
+
+## Validated reference flows
+
+| Chain | Current fully reviewed subset | Local compatibility target |
+| --- | --- | --- |
+| Bitcoin | PSBT v0, 1-in/1-out native P2WPKH, `SIGHASH_ALL`, BIP143 | Bitcoin Core 31.1 regtest |
+| Ethereum | EIP-1559 native ETH transfer, empty calldata/access list | Anvil / Foundry 1.8.0 |
+| Solana | legacy one-signer System Program transfer | Agave 4.2.1 local validator |
+
+Each adapter deliberately rejects transaction classes it cannot yet independently
+parse and explain. See the per-chain `SUPPORTED.md` files for the exact fail-closed
+boundary.
+
+The GitHub `Chain integration` workflow starts disposable local nodes through
+`Pom4H/chain-sandbox`, runs each adapter in a separate job, compares reference wire
+artifacts where applicable, broadcasts the transaction, and verifies acceptance by the
+local chain. Required CI does not depend on public devnets, faucets or third-party RPC
+credentials.
 
 ## Workspace
 
 ```text
 crates/
   wallet-core/        no_std lifecycle, auth, keys, policy and operation state machine
-  chain-api/          contract for on-device parsing, review and execution
-  chain-bitcoin/      Bitcoin adapter (parsers intentionally still incomplete)
-  chain-ethereum/     Ethereum adapter (parsers intentionally still incomplete)
-  chain-solana/       Solana adapter used to exercise the Ed25519-style boundary
+  chain-api/          heap-free parse/review/multi-step execution contract
+  chain-bitcoin/      strict PSBT/P2WPKH reference adapter
+  chain-ethereum/     strict EIP-1559 native-transfer reference adapter
+  chain-solana/       strict System Program transfer reference adapter
 
 docs/
   DOMAIN.md           state machine and invariants
@@ -81,8 +109,8 @@ docs/
 ```
 
 Bitcoin, Ethereum and Solana are the initial architecture probes because they exercise
-very different transaction, account, derivation and signature models. Additional chains
-must be addable without changing the wallet state machine.
+very different UTXO/account/message and ECDSA/Ed25519 models. Additional chains must be
+addable without changing the wallet state machine.
 
 ## Core rule
 
