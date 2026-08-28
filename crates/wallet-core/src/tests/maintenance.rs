@@ -77,6 +77,7 @@ fn backup_check_marks_recovered_wallet_verified() {
         Event::SessionOpened {
             auth,
             session: SessionId(73),
+            wallet: WalletContextId(74),
         },
     )
     .state;

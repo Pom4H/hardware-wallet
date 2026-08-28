@@ -1,6 +1,6 @@
 use crate::{
     AuthState, DisconnectPolicy, Effect, FlowState, HostTrust, Lifecycle, PassphraseMode,
-    PinExhaustion, RejectReason, Session, State, Transition,
+    PinExhaustion, RejectReason, Session, State, Transition, WalletContextId,
 };
 
 use super::common::{failed_attempts, reject, unlocked_session};
@@ -155,6 +155,7 @@ pub(super) fn session_opened(
     state: State,
     actual: crate::AuthId,
     session: crate::SessionId,
+    wallet: WalletContextId,
 ) -> Transition {
     let AuthState::OpeningSession {
         id, host, trust, ..
@@ -169,6 +170,7 @@ pub(super) fn session_opened(
     let auth = AuthState::Unlocked(Session {
         id: session,
         host,
+        wallet,
         trust,
     });
     Transition::new(state.with_auth(auth), Effect::SessionReady)

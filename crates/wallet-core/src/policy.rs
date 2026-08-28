@@ -23,6 +23,22 @@ pub enum BlindSigningPolicy {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SecuritySetting {
+    PinExhaustion(PinExhaustion),
+    Disconnect(DisconnectPolicy),
+    SigningHosts(SigningHostPolicy),
+    BlindSigning(BlindSigningPolicy),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingChange {
+    Security(SecuritySetting),
+    Passphrase(PassphraseMode),
+    RevokeHost(crate::HostId),
+    RevokeAllHosts,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SecurityPolicy {
     pub max_pin_attempts: u8,
     pub pin_exhaustion: PinExhaustion,
@@ -40,6 +56,25 @@ impl SecurityPolicy {
             disconnect: DisconnectPolicy::Lock,
             signing_hosts: SigningHostPolicy::AnySessionHost,
             blind_signing: BlindSigningPolicy::Deny,
+        }
+    }
+
+    #[must_use]
+    pub const fn apply(self, setting: SecuritySetting) -> Self {
+        match setting {
+            SecuritySetting::PinExhaustion(pin_exhaustion) => Self {
+                pin_exhaustion,
+                ..self
+            },
+            SecuritySetting::Disconnect(disconnect) => Self { disconnect, ..self },
+            SecuritySetting::SigningHosts(signing_hosts) => Self {
+                signing_hosts,
+                ..self
+            },
+            SecuritySetting::BlindSigning(blind_signing) => Self {
+                blind_signing,
+                ..self
+            },
         }
     }
 }
