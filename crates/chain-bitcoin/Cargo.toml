@@ -8,5 +8,8 @@ rust-version.workspace = true
 [dependencies]
 hardware-wallet-chain-api = { path = "../chain-api" }
 
+[dev-dependencies]
+hardware-wallet-core = { path = "../wallet-core" }
+
 [lints]
 workspace = true

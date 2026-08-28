@@ -39,7 +39,7 @@ jobs:
 
       # Pin the external sandbox to an exact green commit, never to main.
       - name: Start local chain
-        uses: Pom4H/chain-sandbox@eefb1f1d2db5c53e1cbfd8925cd650d19699f84f
+        uses: Pom4H/chain-sandbox@fd34c73ddfb1509bd5c09020c6140918733cde0f
         with:
           chain: ${{ matrix.chain }}
 
@@ -51,7 +51,10 @@ jobs:
               curl --fail --silent --show-error \
                 --header 'content-type: text/plain;' \
                 --data-binary '{"jsonrpc":"1.0","id":"wallet","method":"getblockcount","params":[]}' \
-                "$BITCOIN_RPC_URL" | grep -q '"result":101'
+                "$BITCOIN_RPC_URL" | grep -q '"result":102'
+              test "$BITCOIN_TEST_PUBKEY" = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+              test -n "$BITCOIN_TEST_ADDRESS"
+              test "$BITCOIN_SIGNER_WALLET" = 'signer'
               ;;
             ethereum)
               curl --fail --silent --show-error \
@@ -72,6 +75,10 @@ jobs:
 
       - name: Run chain crate tests
         run: cargo test -p "${{ matrix.package }}"
+
+      - name: Run Bitcoin PSBT e2e
+        if: matrix.chain == 'bitcoin'
+        run: cargo run -p hardware-wallet-chain-bitcoin --example e2e
 
       - name: Run Ethereum signed-transaction e2e
         if: matrix.chain == 'ethereum'
