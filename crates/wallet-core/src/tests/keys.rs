@@ -66,6 +66,10 @@ fn crypto_operations_make_secret_use_explicit() {
         key,
         format: PublicKeyFormat::Compressed,
     };
+    let digest = CryptoOperation::Hash {
+        algorithm: HashAlgorithm::Hash160,
+        payload: PayloadId(10),
+    };
     let signing = CryptoOperation::Sign {
         key,
         scheme: SignatureScheme::Ecdsa {
@@ -77,6 +81,9 @@ fn crypto_operations_make_secret_use_explicit() {
     };
 
     assert!(!public.uses_private_key());
+    assert!(!digest.uses_private_key());
     assert!(signing.uses_private_key());
-    assert_eq!(signing.key(), key);
+    assert_eq!(public.key(), Some(key));
+    assert_eq!(digest.key(), None);
+    assert_eq!(signing.key(), Some(key));
 }
