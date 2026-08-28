@@ -4,6 +4,7 @@ members = [
     "crates/wallet-core",
     "crates/chain-api",
     "crates/crypto-runtime",
+    "crates/key-lifecycle",
     "crates/hd-key-backend",
     "crates/chain-bitcoin",
     "crates/chain-ethereum",
