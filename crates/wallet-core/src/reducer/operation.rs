@@ -1,6 +1,7 @@
 use crate::{
-    Effect, FlowState, HostTrust, Interaction, OperationKind, OperationStage, PendingOperation,
-    RejectReason, ReviewAssurance, ReviewPlan, State, Transition,
+    BlindSigningPolicy, Effect, FlowState, HostTrust, Interaction, OperationKind, OperationStage,
+    PendingOperation, RejectReason, ReviewAssurance, ReviewPlan, SigningHostPolicy, State,
+    Transition,
 };
 
 use super::common::{reject, reject_operation, unlocked_session};
@@ -49,7 +50,9 @@ pub(super) fn review_prepared(
     let uses_private_key = plan.uses_private_key || plan.kind.uses_private_key();
     plan.uses_private_key = uses_private_key;
 
-    if plan.assurance == ReviewAssurance::Blind && !state.policy().allow_blind_signing {
+    if plan.assurance == ReviewAssurance::Blind
+        && state.policy().blind_signing == BlindSigningPolicy::Deny
+    {
         return reject_operation(
             state.with_flow(FlowState::Idle),
             actual,
@@ -57,7 +60,7 @@ pub(super) fn review_prepared(
         );
     }
 
-    if uses_private_key && state.policy().require_trusted_host_for_signing {
+    if uses_private_key && state.policy().signing_hosts == SigningHostPolicy::TrustedOnly {
         let Some(session) = unlocked_session(state) else {
             return reject_operation(
                 state.with_flow(FlowState::Idle),
