@@ -2,8 +2,9 @@
 
 pub use hardware_wallet_core::{
     AccountDescriptor, AccountId, AccountKind, CryptoOperation, Curve, DerivationError,
-    DerivationPath, HashAlgorithm, Interaction, KeyLocator, KeyPurpose, OperationKind, PayloadId,
-    PublicKeyFormat, ReviewAssurance, ReviewPlan, SignatureScheme, WalletContextId,
+    DerivationPath, ExecutionContext, HashAlgorithm, Interaction, KeyLocator, KeyPurpose, KeyTarget,
+    OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan, SignatureScheme,
+    WalletContextId,
 };
 
 /// Stable identifier for a chain implementation.
@@ -39,19 +40,21 @@ pub trait ChainModule {
     /// core. This metadata never replaces the actual human-readable review.
     fn review_plan(review: &Self::Review) -> ReviewPlan;
 
-    /// Produce the exact public-key/signing execution only after the core has
-    /// accepted the review and, where required, obtained user approval.
+    /// Produce the exact public-key/signing execution after approval.
     ///
-    /// Implementations should express cryptographic work with the generic
-    /// `CryptoOperation` primitives where possible. Chain-specific execution
-    /// types remain allowed for streaming, multi-step and protocol-specific
-    /// operations.
+    /// `context` is a capability created only from an unlocked wallet state.
+    /// Chain requests can select an account/path with [`KeyTarget`], but cannot
+    /// select another passphrase wallet context. The adapter binds keys through
+    /// [`ExecutionContext::bind_key`].
     ///
     /// # Errors
     ///
     /// Returns a chain-specific error when the reviewed request cannot be
     /// converted into a safe execution request.
-    fn prepare_execution(review: &Self::Review) -> Result<Self::Execution, Self::Error>;
+    fn prepare_execution(
+        review: &Self::Review,
+        context: ExecutionContext,
+    ) -> Result<Self::Execution, Self::Error>;
 
     /// Convert the low-level execution result into the chain-specific response
     /// returned to the host.

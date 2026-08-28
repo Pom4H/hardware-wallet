@@ -25,6 +25,12 @@ the exact base or passphrase-derived wallet currently opened by the secure runti
 Every operation is bound to that context so an in-flight review cannot be executed
 against a different hidden wallet.
 
+Chain requests select only a relative `KeyTarget` (account, derivation path and purpose).
+They cannot construct `ExecutionContext`, and `KeyLocator` does not expose writable
+wallet-context fields. Only an unlocked `State` can produce an `ExecutionContext`, which
+binds the relative target to the already authorized wallet. This prevents wallet-context
+selection from becoming an untrusted host parameter.
+
 The exact secure-element design is not frozen. The project must not claim that a seed
 or private key never enters the MCU until the actual implementation can prove that.
 
@@ -48,4 +54,6 @@ change succeeds.
 - security settings require physical confirmation and successful persistence;
 - host changes cannot take over an unlocked session;
 - wallet-context changes cannot take over an in-flight operation;
+- host/chain input cannot select a different wallet context for key execution;
+- a locked state cannot produce a key execution capability;
 - tamper and configured PIN-attempt exhaustion enter the wipe flow.

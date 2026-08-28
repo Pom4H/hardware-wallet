@@ -31,13 +31,36 @@ fn derivation_path_rejects_invalid_index_and_excess_depth() {
 }
 
 #[test]
-fn crypto_operations_make_secret_use_explicit() {
-    let key = KeyLocator {
-        wallet: WalletContextId(7),
+fn locked_state_cannot_bind_a_key() {
+    let state = provisioned_state(PassphraseMode::Disabled);
+    assert_eq!(state.execution_context(), None);
+}
+
+#[test]
+fn execution_context_binds_key_to_authorized_wallet() {
+    let wallet = WalletContextId(42);
+    let state = unlocked_state_with_wallet(HostTrust::Trusted, wallet);
+    let context = state.execution_context().unwrap();
+    let target = KeyTarget {
         account: AccountId(3),
         path: DerivationPath::new(),
         purpose: KeyPurpose::ExternalAddress,
     };
+
+    let key = context.bind_key(target);
+    assert_eq!(key.wallet(), wallet);
+    assert_eq!(key.target(), target);
+}
+
+#[test]
+fn crypto_operations_make_secret_use_explicit() {
+    let state = unlocked_state_with_wallet(HostTrust::Trusted, WalletContextId(7));
+    let context = state.execution_context().unwrap();
+    let key = context.bind_key(KeyTarget {
+        account: AccountId(3),
+        path: DerivationPath::new(),
+        purpose: KeyPurpose::ExternalAddress,
+    });
 
     let public = CryptoOperation::DerivePublicKey {
         key,

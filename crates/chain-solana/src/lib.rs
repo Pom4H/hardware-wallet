@@ -1,16 +1,16 @@
 #![no_std]
 
 use hardware_wallet_chain_api::{
-    ChainId, ChainModule, CryptoOperation, Interaction, KeyLocator, OperationKind, PublicKeyFormat,
-    ReviewAssurance, ReviewPlan,
+    ChainId, ChainModule, CryptoOperation, ExecutionContext, Interaction, KeyTarget, OperationKind,
+    PublicKeyFormat, ReviewAssurance, ReviewPlan,
 };
 
 pub struct Solana;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Request {
-    ShowAddress(KeyLocator),
-    ExportPublicKey(KeyLocator),
+    ShowAddress(KeyTarget),
+    ExportPublicKey(KeyTarget),
     SignMessage,
     SignTransaction,
 }
@@ -18,7 +18,7 @@ pub enum Request {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Review {
     kind: OperationKind,
-    key: Option<KeyLocator>,
+    key: Option<KeyTarget>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,10 +74,13 @@ impl ChainModule for Solana {
         }
     }
 
-    fn prepare_execution(review: &Self::Review) -> Result<Self::Execution, Self::Error> {
-        let key = review.key.ok_or(Error::MissingKey)?;
+    fn prepare_execution(
+        review: &Self::Review,
+        context: ExecutionContext,
+    ) -> Result<Self::Execution, Self::Error> {
+        let target = review.key.ok_or(Error::MissingKey)?;
         Ok(Execution::Crypto(CryptoOperation::DerivePublicKey {
-            key,
+            key: context.bind_key(target),
             format: PublicKeyFormat::Raw,
         }))
     }

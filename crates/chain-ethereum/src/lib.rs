@@ -1,7 +1,7 @@
 #![no_std]
 
 use hardware_wallet_chain_api::{
-    ChainId, ChainModule, Interaction, OperationKind, ReviewAssurance, ReviewPlan,
+    ChainId, ChainModule, ExecutionContext, Interaction, OperationKind, ReviewAssurance, ReviewPlan,
 };
 
 pub struct Ethereum;
@@ -76,7 +76,10 @@ impl ChainModule for Ethereum {
         }
     }
 
-    fn prepare_execution(review: &Self::Review) -> Result<Self::Execution, Self::Error> {
+    fn prepare_execution(
+        review: &Self::Review,
+        _context: ExecutionContext,
+    ) -> Result<Self::Execution, Self::Error> {
         Ok(Execution { kind: review.kind })
     }
 

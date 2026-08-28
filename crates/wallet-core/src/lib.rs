@@ -20,7 +20,7 @@ pub use ids::{
 };
 pub use key::{
     AccountDescriptor, AccountId, AccountKind, ChildNumber, DerivationError, DerivationPath,
-    KeyLocator, KeyPurpose, MAX_DERIVATION_DEPTH,
+    ExecutionContext, KeyLocator, KeyPurpose, KeyTarget, MAX_DERIVATION_DEPTH,
 };
 pub use policy::{
     BlindSigningPolicy, DisconnectPolicy, PassphraseMode, PinExhaustion, SecurityPolicy,

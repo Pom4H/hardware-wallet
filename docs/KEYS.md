@@ -2,7 +2,34 @@
 
 The wallet core describes keys and cryptographic work without owning any secret bytes.
 A `WalletContextId` identifies the active base/passphrase wallet, `AccountId` identifies
-an account inside that context, and `KeyLocator` describes a derivation path and purpose.
+an account inside that context, and `KeyTarget` describes an account/path/purpose relative
+to whichever wallet is currently authorized.
+
+## Authorized key binding
+
+A host or chain request never supplies `WalletContextId` for a cryptographic operation.
+It may request only a `KeyTarget`:
+
+```text
+account + derivation path + purpose
+```
+
+After PIN/passphrase authorization, the reducer exposes an `ExecutionContext`. This type
+has no public constructor. It binds the requested target to the wallet context already
+stored in the unlocked session:
+
+```text
+untrusted KeyTarget
+        +
+ExecutionContext from unlocked State
+        |
+        v
+    KeyLocator
+```
+
+`KeyLocator` fields are private. This makes the active base/hidden wallet context a
+capability derived from authorization rather than another host-controlled parameter.
+A locked state cannot produce an `ExecutionContext`.
 
 ## Derivation
 
@@ -12,7 +39,7 @@ encoding into the generic model.
 
 The core intentionally does not decide whether a path is valid for Bitcoin, Ethereum,
 Solana or another chain. The chain adapter validates its own path policy before it
-creates a `KeyLocator` for execution.
+creates a key target for execution.
 
 ## Generic crypto operations
 
@@ -42,12 +69,13 @@ requested operation is unsupported.
 
 `AccountDescriptor` is metadata, not an unbounded account database. Hardware wallets
 may choose to persist accounts, derive them on demand, or let the host maintain account
-catalogues. The trusted device still validates every key locator used for address display
+catalogues. The trusted device still validates every key target used for address display
 or signing.
 
 ## Chain boundary
 
-Chain adapters should use `CryptoOperation` when a request reduces to a standard key
+Chain adapters receive `ExecutionContext` only at `prepare_execution`, after review and
+approval. They should use `CryptoOperation` when a request reduces to a standard key
 operation. They may keep a chain-specific execution type for streaming transactions,
 multi-input signing, multisig protocols or other workflows that require several crypto
 steps.

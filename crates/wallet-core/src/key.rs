@@ -1,4 +1,4 @@
-use crate::WalletContextId;
+use crate::{AuthState, State, WalletContextId};
 
 pub const MAX_DERIVATION_DEPTH: usize = 16;
 
@@ -127,10 +127,62 @@ pub struct AccountDescriptor {
     pub root: DerivationPath,
 }
 
+/// Host/chain-visible key selection relative to the currently authorized wallet.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct KeyLocator {
-    pub wallet: WalletContextId,
+pub struct KeyTarget {
     pub account: AccountId,
     pub path: DerivationPath,
     pub purpose: KeyPurpose,
+}
+
+/// Fully authorized key selection. The wallet context cannot be supplied by a
+/// chain request; it is bound by [`ExecutionContext`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct KeyLocator {
+    wallet: WalletContextId,
+    target: KeyTarget,
+}
+
+impl KeyLocator {
+    #[must_use]
+    pub const fn wallet(self) -> WalletContextId {
+        self.wallet
+    }
+
+    #[must_use]
+    pub const fn target(self) -> KeyTarget {
+        self.target
+    }
+}
+
+/// Capability proving that a wallet context is currently authorized.
+///
+/// There is deliberately no public constructor. Runtime code obtains this only
+/// from [`State::execution_context`] after the reducer has opened a session.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ExecutionContext {
+    wallet: WalletContextId,
+}
+
+impl ExecutionContext {
+    #[must_use]
+    pub const fn bind_key(self, target: KeyTarget) -> KeyLocator {
+        KeyLocator {
+            wallet: self.wallet,
+            target,
+        }
+    }
+}
+
+impl State {
+    /// Returns a key-binding capability only while the wallet is unlocked.
+    #[must_use]
+    pub const fn execution_context(self) -> Option<ExecutionContext> {
+        match self.auth() {
+            AuthState::Unlocked(session) => Some(ExecutionContext {
+                wallet: session.wallet,
+            }),
+            _ => None,
+        }
+    }
 }
