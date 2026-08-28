@@ -1,0 +1,221 @@
+[1m[92m    Updating[0m crates.io index
+[1m[92m Downloading[0m crates ...
+[1m[92m  Downloaded[0m autocfg v1.5.1
+[1m[92m  Downloaded[0m arrayvec v0.7.8
+[1m[92m  Downloaded[0m sponge-cursor v0.1.0
+[1m[92m  Downloaded[0m rustc_version v0.2.3
+[1m[92m  Downloaded[0m bs58 v0.5.1
+[1m[92m  Downloaded[0m bare-metal v0.2.5
+[1m[92m  Downloaded[0m base16ct v1.0.0
+[1m[92m  Downloaded[0m rfc6979 v0.6.0
+[1m[92m  Downloaded[0m cpufeatures v0.2.17
+[1m[92m  Downloaded[0m version_check v0.9.5
+[1m[92m  Downloaded[0m ed25519 v3.0.0
+[1m[92m  Downloaded[0m sha2 v0.10.9
+[1m[92m  Downloaded[0m quote v1.0.47
+[1m[92m  Downloaded[0m ctutils v0.4.2
+[1m[92m  Downloaded[0m primefield v0.14.0
+[1m[92m  Downloaded[0m bip32 v0.5.3
+[1m[92m  Downloaded[0m cortex-m-macros v0.7.8
+[1m[92m  Downloaded[0m elliptic-curve v0.14.1
+[1m[92m  Downloaded[0m hmac v0.13.0
+[1m[92m  Downloaded[0m vcell v0.1.3
+[1m[92m  Downloaded[0m cortex-m v0.7.9
+[1m[92m  Downloaded[0m bip39 v2.2.2
+[1m[92m  Downloaded[0m cpubits v0.1.1
+[1m[92m  Downloaded[0m cortex-m-rt-macros v0.7.6
+[1m[92m  Downloaded[0m critical-section v1.2.0
+[1m[92m  Downloaded[0m subtle v2.6.1
+[1m[92m  Downloaded[0m cortex-m-rt v0.7.6
+[1m[92m  Downloaded[0m num-traits v0.2.19
+[1m[92m  Downloaded[0m volatile-register v0.2.2
+[1m[92m  Downloaded[0m curve25519-dalek-derive v0.1.1
+[1m[92m  Downloaded[0m primeorder v0.14.0
+[1m[92m  Downloaded[0m nb v1.1.0
+[1m[92m  Downloaded[0m block-buffer v0.12.1
+[1m[92m  Downloaded[0m generic-array v0.14.7
+[1m[92m  Downloaded[0m panic-halt v0.2.0
+[1m[92m  Downloaded[0m rand_core v0.6.4
+[1m[92m  Downloaded[0m ripemd v0.1.3
+[1m[92m  Downloaded[0m rustc_version v0.4.1
+[1m[92m  Downloaded[0m semver-parser v0.7.0
+[1m[92m  Downloaded[0m wnaf v0.14.0
+[1m[92m  Downloaded[0m group v0.14.0
+[1m[92m  Downloaded[0m rand_core v0.10.1
+[1m[92m  Downloaded[0m signature v3.0.0
+[1m[92m  Downloaded[0m void v1.0.2
+[1m[92m  Downloaded[0m bitcoin_hashes v0.14.101
+[1m[92m  Downloaded[0m block-buffer v0.10.4
+[1m[92m  Downloaded[0m cmov v0.5.4
+[1m[92m  Downloaded[0m cpufeatures v0.3.1
+[1m[92m  Downloaded[0m crypto-common v0.1.7
+[1m[92m  Downloaded[0m crypto-common v0.2.2
+[1m[92m  Downloaded[0m digest v0.10.7
+[1m[92m  Downloaded[0m ff v0.14.0
+[1m[92m  Downloaded[0m nb v0.1.3
+[1m[92m  Downloaded[0m embedded-hal v0.2.7
+[1m[92m  Downloaded[0m hmac v0.12.1
+[1m[92m  Downloaded[0m proc-macro2 v1.0.107
+[1m[92m  Downloaded[0m ripemd v0.2.0
+[1m[92m  Downloaded[0m semver v0.9.0
+[1m[92m  Downloaded[0m zeroize v1.9.0
+[1m[92m  Downloaded[0m zeroize_derive v1.5.0
+[1m[92m  Downloaded[0m bitfield v0.13.2
+[1m[92m  Downloaded[0m cfg-if v1.0.4
+[1m[92m  Downloaded[0m ecdsa v0.17.0
+[1m[92m  Downloaded[0m hybrid-array v0.4.14
+[1m[92m  Downloaded[0m sec1 v0.8.1
+[1m[92m  Downloaded[0m embedded-hal v1.0.0
+[1m[92m  Downloaded[0m hex-conservative v0.2.2
+[1m[92m  Downloaded[0m keccak v0.2.2
+[1m[92m  Downloaded[0m semver v1.0.28
+[1m[92m  Downloaded[0m sha2 v0.11.0
+[1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m const-oid v0.10.2
+[1m[92m  Downloaded[0m digest v0.11.3
+[1m[92m  Downloaded[0m ed25519-dalek v3.0.0
+[1m[92m  Downloaded[0m k256 v0.14.0
+[1m[92m  Downloaded[0m typenum v1.20.1
+[1m[92m  Downloaded[0m der v0.8.1
+[1m[92m  Downloaded[0m sha3 v0.12.0
+[1m[92m  Downloaded[0m curve25519-dalek v5.0.0
+[1m[92m  Downloaded[0m syn v2.0.119
+[1m[92m  Downloaded[0m crypto-bigint v0.7.5
+[1m[92m   Compiling[0m proc-macro2 v1.0.107
+[1m[92m   Compiling[0m quote v1.0.47
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m   Compiling[0m subtle v2.6.1
+[1m[92m   Compiling[0m typenum v1.20.1
+[1m[92m   Compiling[0m rand_core v0.10.1
+[1m[92m   Compiling[0m cmov v0.5.4
+[1m[92m   Compiling[0m const-oid v0.10.2
+[1m[92m   Compiling[0m ctutils v0.4.2
+[1m[92m   Compiling[0m autocfg v1.5.1
+[1m[92m   Compiling[0m version_check v0.9.5
+[1m[92m   Compiling[0m generic-array v0.14.7
+[1m[92m   Compiling[0m syn v2.0.119
+[1m[92m   Compiling[0m num-traits v0.2.19
+[1m[92m   Compiling[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m ff v0.14.0
+[1m[92m   Compiling[0m cpubits v0.1.1
+[1m[92m   Compiling[0m group v0.14.0
+[1m[92m   Compiling[0m base16ct v1.0.0
+[1m[92m   Compiling[0m hardware-wallet-core v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/wallet-core)
+[1m[92m   Compiling[0m block-buffer v0.10.4
+[1m[92m   Compiling[0m crypto-common v0.1.7
+[1m[92m   Compiling[0m semver v1.0.28
+[1m[92m   Compiling[0m digest v0.10.7
+[1m[92m   Compiling[0m rustc_version v0.4.1
+[1m[92m   Compiling[0m semver-parser v0.7.0
+[1m[92m   Compiling[0m hardware-wallet-chain-api v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/chain-api)
+[1m[92m   Compiling[0m arrayvec v0.7.8
+[1m[92m   Compiling[0m curve25519-dalek v5.0.0
+[1m[92m   Compiling[0m semver v0.9.0
+[1m[92m   Compiling[0m hex-conservative v0.2.2
+[1m[92m   Compiling[0m rustc_version v0.2.3
+[1m[92m   Compiling[0m sha2 v0.10.9
+[1m[92m   Compiling[0m keccak v0.2.2
+[1m[92m   Compiling[0m bare-metal v0.2.5
+[1m[92m   Compiling[0m cortex-m-rt v0.7.6
+[1m[92m   Compiling[0m nb v1.1.0
+[1m[92m   Compiling[0m sponge-cursor v0.1.0
+[1m[92m   Compiling[0m cortex-m v0.7.9
+[1m[92m   Compiling[0m cortex-m-macros v0.7.8
+[1m[92m   Compiling[0m nb v0.1.3
+[1m[92m   Compiling[0m bs58 v0.5.1
+[1m[92m   Compiling[0m bitcoin_hashes v0.14.101
+[1m[92m   Compiling[0m ripemd v0.1.3
+[1m[92m   Compiling[0m hmac v0.12.1
+[1m[92m   Compiling[0m rand_core v0.6.4
+[1m[92m   Compiling[0m void v1.0.2
+[1m[92m   Compiling[0m vcell v0.1.3
+[1m[92m   Compiling[0m volatile-register v0.2.2
+[1m[92m   Compiling[0m embedded-hal v0.2.7
+[1m[92m   Compiling[0m bitfield v0.13.2
+[1m[92m   Compiling[0m hardware-wallet-firmware-budget v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/firmware-budget)
+[1m[92m   Compiling[0m embedded-hal v1.0.0
+[1m[92m   Compiling[0m critical-section v1.2.0
+[1m[92m   Compiling[0m hardware-wallet-chain-ethereum v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/chain-ethereum)
+[1m[92m   Compiling[0m hardware-wallet-chain-solana v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/chain-solana)
+[1m[92m   Compiling[0m hardware-wallet-chain-bitcoin v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/chain-bitcoin)
+[1m[92m   Compiling[0m panic-halt v0.2.0
+[1m[92m   Compiling[0m zeroize_derive v1.5.0
+[1m[92m   Compiling[0m cortex-m-rt-macros v0.7.6
+[1m[92m   Compiling[0m zeroize v1.9.0
+[1m[92m   Compiling[0m hybrid-array v0.4.14
+[1m[92m   Compiling[0m der v0.8.1
+[1m[92m   Compiling[0m bip32 v0.5.3
+[1m[92m   Compiling[0m bip39 v2.2.2
+[1m[92m   Compiling[0m hardware-wallet-key-lifecycle v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/key-lifecycle)
+[1m[92m   Compiling[0m crypto-common v0.2.2
+[1m[92m   Compiling[0m block-buffer v0.12.1
+[1m[92m   Compiling[0m crypto-bigint v0.7.5
+[1m[92m   Compiling[0m wnaf v0.14.0
+[1m[92m   Compiling[0m sec1 v0.8.1
+[1m[92m   Compiling[0m digest v0.11.3
+[1m[92m   Compiling[0m signature v3.0.0
+[1m[92m   Compiling[0m hmac v0.13.0
+[1m[92m   Compiling[0m sha2 v0.11.0
+[1m[92m   Compiling[0m ed25519 v3.0.0
+[1m[92m   Compiling[0m sha3 v0.12.0
+[1m[92m   Compiling[0m ripemd v0.2.0
+[1m[92m   Compiling[0m elliptic-curve v0.14.1
+[1m[92m   Compiling[0m rfc6979 v0.6.0
+[1m[92m   Compiling[0m primefield v0.14.0
+[1m[92m   Compiling[0m ed25519-dalek v3.0.0
+[1m[92m   Compiling[0m ecdsa v0.17.0
+[1m[92m   Compiling[0m primeorder v0.14.0
+[1m[92m   Compiling[0m k256 v0.14.0
+[1m[92m   Compiling[0m hardware-wallet-crypto-runtime v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/crypto-runtime)
+[1m[92m   Compiling[0m hardware-wallet-hd-key-backend v0.1.0 (/home/runner/work/hardware-wallet/hardware-wallet/crates/hd-key-backend)
+[1m[91merror[0m[1m: usage of the unsafe `#[no_mangle]` attribute[0m
+  [1m[94m--> [0mcrates/firmware-budget/src/virtual_device.rs:27:10
+   [1m[94m|[0m
+[1m[94m27[0m [1m[94m|[0m #[unsafe(no_mangle)]
+   [1m[94m|[0m          [1m[91m^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: the linker's behavior with multiple libraries exporting duplicate symbol names is undefined and Rust cannot provide guarantees when you manually override them
+   [1m[94m= [0m[1mnote[0m: requested on the command line with `-F unsafe-code`
+
+[1m[91merror[0m[1m: usage of the unsafe `#[no_mangle]` attribute[0m
+   [1m[94m--> [0mcrates/firmware-budget/src/main.rs:148:10
+    [1m[94m|[0m
+[1m[94m148[0m [1m[94m|[0m #[unsafe(no_mangle)]
+    [1m[94m|[0m          [1m[91m^^^^^^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: the linker's behavior with multiple libraries exporting duplicate symbol names is undefined and Rust cannot provide guarantees when you manually override them
+
+[1m[33mwarning[0m[1m: function `exercise` is never used[0m
+   [1m[94m--> [0mcrates/firmware-budget/src/main.rs:291:4
+    [1m[94m|[0m
+[1m[94m291[0m [1m[94m|[0m fn exercise(selector: u8) -> u32 {
+    [1m[94m|[0m    [1m[33m^^^^^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: function `exercise_secp_runtime` is never used[0m
+   [1m[94m--> [0mcrates/firmware-budget/src/main.rs:365:4
+    [1m[94m|[0m
+[1m[94m365[0m [1m[94m|[0m fn exercise_secp_runtime(
+    [1m[94m|[0m    [1m[33m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: function `exercise_ed25519_runtime` is never used[0m
+   [1m[94m--> [0mcrates/firmware-budget/src/main.rs:426:4
+    [1m[94m|[0m
+[1m[94m426[0m [1m[94m|[0m fn exercise_ed25519_runtime(
+    [1m[94m|[0m    [1m[33m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: function `exercise_chains` is never used[0m
+   [1m[94m--> [0mcrates/firmware-budget/src/main.rs:460:4
+    [1m[94m|[0m
+[1m[94m460[0m [1m[94m|[0m fn exercise_chains(
+    [1m[94m|[0m    [1m[33m^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: function `exercise_domain_surface` is never used[0m
+   [1m[94m--> [0mcrates/firmware-budget/src/main.rs:526:4
+    [1m[94m|[0m
+[1m[94m526[0m [1m[94m|[0m fn exercise_domain_surface(selector: u8) -> u32 {
+    [1m[94m|[0m    [1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m: `hardware-wallet-firmware-budget` (bin "hardware-wallet-firmware-budget") generated 5 warnings
+[1m[91merror[0m: could not compile `hardware-wallet-firmware-budget` (bin "hardware-wallet-firmware-budget") due to 2 previous errors; 5 warnings emitted
