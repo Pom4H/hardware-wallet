@@ -2,9 +2,9 @@
 
 pub use hardware_wallet_core::{
     AccountDescriptor, AccountId, AccountKind, CryptoOperation, Curve, DerivationError,
-    DerivationPath, ExecutionContext, HashAlgorithm, Interaction, KeyLocator, KeyPurpose, KeyTarget,
-    OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan, SignatureScheme,
-    WalletContextId,
+    DerivationPath, ExecutionContext, HashAlgorithm, Interaction, KeyLocator, KeyPurpose,
+    KeyTarget, OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan,
+    SignatureScheme, WalletContextId,
 };
 
 /// Stable identifier for a chain implementation.
