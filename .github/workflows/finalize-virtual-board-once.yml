@@ -25,6 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import re
           from pathlib import Path
 
           cargo_path = Path('crates/firmware-budget/Cargo.toml')
@@ -43,37 +44,12 @@ jobs:
           source = main_path.read_text()
           import_anchor = 'use panic_halt as _;\n'
           module = '\n#[cfg(feature = "firmverse-probe")]\nmod virtual_device;\n'
-          if module.strip() not in source:
+          if 'mod virtual_device;' not in source:
               if import_anchor not in source:
                   raise SystemExit('panic import anchor missing')
               source = source.replace(import_anchor, import_anchor + module, 1)
 
-          old = '''#[entry]
-          fn main() -> ! {
-              let selector = black_box(0x5a_u8);
-
-              #[cfg(feature = "firmverse-probe")]
-              let success = firmverse_self_test(selector);
-
-              #[cfg(not(feature = "firmverse-probe"))]
-              {
-                  let result = exercise(selector);
-                  black_box(result);
-              }
-
-              #[cfg(feature = "firmverse-probe")]
-              cortex_m_semihosting::debug::exit(if success {
-                  cortex_m_semihosting::debug::EXIT_SUCCESS
-              } else {
-                  cortex_m_semihosting::debug::EXIT_FAILURE
-              });
-
-              loop {
-                  cortex_m::asm::nop();
-              }
-          }
-          '''
-          new = '''#[entry]
+          new_main = '''#[entry]
           fn main() -> ! {
               let selector = black_box(0x5a_u8);
 
@@ -100,20 +76,25 @@ jobs:
           pub extern "C" fn firmverse_done() {
               cortex_m::asm::nop();
           }
+
           '''
-          if old not in source:
-              if 'black_box(virtual_device::run(selector));' not in source:
-                  raise SystemExit('firmware entrypoint anchor changed unexpectedly')
-          else:
-              source = source.replace(old, new, 1)
+          if 'black_box(virtual_device::run(selector));' not in source:
+              source, count = re.subn(
+                  r'#\[entry\]\nfn main\(\) -> ! \{.*?\n\}\n\n(?=#\[cfg\(feature = "firmverse-probe"\)\]\n#\[inline\(never\)\]\nfn firmverse_self_test)',
+                  new_main,
+                  source,
+                  count=1,
+                  flags=re.S,
+              )
+              if count != 1:
+                  raise SystemExit(f'expected one firmware entrypoint, replaced {count}')
           main_path.write_text(source)
 
           build_path = Path('crates/firmware-budget/build.rs')
           build = build_path.read_text()
-          old_write = '''    fs::write(output.join("memory.x"), include_bytes!("memory.x"))
-              .expect("write generic probe memory layout");
-          '''
-          new_write = '''    if env::var_os("CARGO_FEATURE_FIRMVERSE_PROBE").is_some() {
+          if 'write Firmverse secure memory layout' not in build:
+              pattern = re.escape('    fs::write(output.join("memory.x"), include_bytes!("memory.x"))\n        .expect("write generic probe memory layout");')
+              replacement = '''    if env::var_os("CARGO_FEATURE_FIRMVERSE_PROBE").is_some() {
               fs::write(
                   output.join("memory.x"),
                   b"MEMORY\\n{\\n  FLASH : ORIGIN = 0x10000000, LENGTH = 1024K\\n  RAM   : ORIGIN = 0x38000000, LENGTH = 256K\\n}\\n\\n_stack_start = ORIGIN(RAM) + LENGTH(RAM);\\n",
@@ -122,13 +103,10 @@ jobs:
           } else {
               fs::write(output.join("memory.x"), include_bytes!("memory.x"))
                   .expect("write generic probe memory layout");
-          }
-          '''
-          if old_write not in build:
-              if 'write Firmverse secure memory layout' not in build:
-                  raise SystemExit('build.rs memory anchor changed unexpectedly')
-          else:
-              build = build.replace(old_write, new_write, 1)
+          }'''
+              build, count = re.subn(pattern, replacement, build, count=1)
+              if count != 1:
+                  raise SystemExit(f'expected one memory writer, replaced {count}')
           build_path.write_text(build)
           PY
 
