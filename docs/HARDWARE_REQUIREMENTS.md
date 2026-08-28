@@ -41,6 +41,22 @@ CI links it for two candidate CPU profiles:
 The generic linker map is intentionally larger than any expected chip. It only provides
 addresses so the ELF can link; it is not a hardware recommendation.
 
+## Compiler and dependency reproducibility
+
+Flash size is compiler-sensitive. A floating `stable` toolchain can change codegen even
+when the repository source does not change, so it is unsuitable as an MCU-selection
+baseline.
+
+The sizing path therefore uses three separate contracts:
+
+- `rust-toolchain.toml` pins Rust **1.98.0** and the Cortex-M targets;
+- every sizing and network command invokes `cargo +1.98.0` explicitly;
+- `Cargo.lock` pins the complete dependency graph.
+
+The workspace still declares Rust **1.85** as its MSRV. CI checks that version separately
+with `cargo +1.85.0 check`. MSRV compatibility and byte-for-byte hardware budgeting are
+different questions and must not silently share a moving compiler.
+
 ## Flash calculation
 
 Flash usage is read from the final ELF, including the initialized `.data` load image:

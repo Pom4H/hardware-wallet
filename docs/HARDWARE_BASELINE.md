@@ -1,6 +1,11 @@
 # Hardware sizing baseline
 
-Measured on **2026-08-28** from commit `3f1fa7f156cdc5af60b9781da2c68d739b9af1e4`.
+The baseline was first reproduced from commit `6385481ba5bd68e45e6eb49a0d25287b48807aba`
+with **Rust 1.98.0 / LLVM 22.1.8**. `rust-toolchain.toml` and `Cargo.lock` now pin
+the compiler and dependency graph used by the hardware-budget workflow, so a
+Flash delta means the linked program changed rather than the moving `stable`
+channel changed underneath it. The declared Rust 1.85 MSRV is checked in a
+separate CI job and is not used as the byte-size reference compiler.
 
 The linked probe includes the wallet reducer, BIP-39 lifecycle, BIP-32 and
 SLIP-0010, secp256k1 and Ed25519 signing, all implemented hashes, and the
