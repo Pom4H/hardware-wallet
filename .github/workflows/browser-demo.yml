@@ -24,7 +24,7 @@ jobs:
         run: bash tools/build_browser_wallet_demo.sh
       - name: Check Intel HEX contains the Firmverse SRAM vector table
         run: |
-          grep -q '^:.*1FFF' demos/browser-wallet/dist/wallet-demo.hex
+          grep -q '^:020000041FFF' demos/browser-wallet/dist/wallet-demo.hex
           test -s demos/browser-wallet/dist/wallet-demo.elf
       - uses: actions/upload-artifact@v4
         with:
