@@ -71,10 +71,7 @@ fn reboot_discards_confirmed_but_unpersisted_setting_change() {
     let restored = State::restore(snapshot);
     let stale = update(restored, Event::SettingChangePersisted(id));
     assert_eq!(stale.effect, Effect::Reject(RejectReason::InvalidState));
-    assert_eq!(
-        stale.state.policy().blind_signing,
-        BlindSigningPolicy::Deny
-    );
+    assert_eq!(stale.state.policy().blind_signing, BlindSigningPolicy::Deny);
 }
 
 #[test]
