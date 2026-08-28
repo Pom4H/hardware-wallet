@@ -1,52 +1,10 @@
 #![no_std]
 
+pub use hardware_wallet_core::{Interaction, OperationKind, ReviewAssurance, ReviewPlan};
+
 /// Stable identifier for a chain implementation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChainId(pub &'static str);
-
-/// What a chain request ultimately asks the wallet to do.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OperationKind {
-    ShowAddress,
-    ExportPublicKey,
-    CreateAccount,
-    SignTransaction,
-    SignMessage,
-    SignTypedData,
-    SignArbitraryData,
-    Custom(u16),
-}
-
-/// How completely the device can explain the request to a human.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReviewAssurance {
-    /// All security-relevant fields are decoded and displayed by the device.
-    Full,
-    /// The device can explain the request, but some opaque data remains.
-    Limited,
-    /// The device cannot meaningfully explain what will be signed.
-    Blind,
-}
-
-/// Minimum interaction requested by the chain module.
-///
-/// The wallet core may always strengthen this requirement. For example, a
-/// signing operation is never allowed to become `Silent` even if a buggy chain
-/// module asks for it.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Interaction {
-    Silent,
-    Display,
-    Confirm,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ReviewPlan {
-    pub kind: OperationKind,
-    pub uses_private_key: bool,
-    pub assurance: ReviewAssurance,
-    pub interaction: Interaction,
-}
 
 /// A chain module owns every chain-specific security decision: parsing the raw
 /// request, deriving the exact human review, and preparing the exact operation
