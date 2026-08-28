@@ -41,12 +41,18 @@ The core intentionally does not decide whether a path is valid for Bitcoin, Ethe
 Solana or another chain. The chain adapter validates its own path policy before it
 creates a key target for execution.
 
+The current software backend binds one concrete secret to one `KeyTarget`; it does not
+yet implement BIP-32 or SLIP-0010 derivation. HD derivation belongs behind the crypto
+runtime boundary so chain parsers and wallet state do not change when a software key
+backend is replaced by a secure element or another key store.
+
 ## Generic crypto operations
 
-The runtime boundary understands two generic operations:
+The runtime boundary understands three generic operations:
 
 ```text
 DerivePublicKey(key, format)
+Hash(algorithm, payload)
 Sign(key, scheme, prehash, payload)
 ```
 
@@ -58,12 +64,35 @@ Supported vocabulary is intentionally broader than the initial adapters:
 
 - curves: secp256k1, Ed25519, P-256, sr25519, BLS12-381, custom;
 - signatures: ECDSA, secp256k1 Schnorr, Ed25519, sr25519, BLS12-381, custom;
-- hashes: SHA-256, double SHA-256, Keccak-256, BLAKE2b, SHA-512/256, custom;
+- hashes: SHA-256, double SHA-256, HASH160, Keccak-256, BLAKE2b, SHA-512/256, custom;
 - public-key formats: raw, compressed, uncompressed, x-only, extended, custom.
 
 This is a vocabulary, not a promise that every reference hardware target implements
 every algorithm. A runtime advertises concrete capabilities and must fail closed when a
 requested operation is unsupported.
+
+## Crypto runtime
+
+`hardware-wallet-crypto-runtime` is the first real executor of this contract. Its
+`SoftwareKeyBackend` is deliberately a development backend: one secret is bound to one
+`WalletContextId + KeyTarget`, stored in a zeroizing wrapper, and may only be used when
+the `KeyLocator` produced by the authorized wallet session matches both values.
+
+The current backend implements:
+
+- compressed/uncompressed/raw/x-only secp256k1 public keys;
+- raw Ed25519 public keys;
+- deterministic low-S secp256k1 ECDSA, including recovery ID for Ethereum;
+- Ed25519 signing;
+- SHA-256, double-SHA256, HASH160, Keccak-256 and SHA-512/256.
+
+The three chain E2Es now use this runtime to produce their signatures. Bitcoin Core,
+Anvil and Agave only provide deterministic local chain state and verify/broadcast the
+resulting transactions; they do not sign on behalf of the hardware-wallet code.
+
+A production backend must additionally own hardware entropy, master-secret lifecycle,
+HD derivation, persistent or secure-element key storage, stronger zeroization guarantees,
+and capability discovery for algorithms supported by the selected hardware.
 
 ## Accounts
 
@@ -75,11 +104,10 @@ or signing.
 ## Chain boundary
 
 Chain adapters receive `ExecutionContext` only at `prepare_execution`, after review and
-approval. They should use `CryptoOperation` when a request reduces to a standard key
-operation. They may keep a chain-specific execution type for streaming transactions,
-multi-input signing, multisig protocols or other workflows that require several crypto
-steps.
+approval. They use `CryptoOperation` rather than touching a private key or hashing
+backend directly. A chain-specific execution can therefore validate a derived public
+key, hash one or more protocol-owned payloads, and only then request a signature.
 
 Bitcoin, Ethereum and Solana are the initial architecture probes because together they
-exercise UTXO/account models, secp256k1 ECDSA/Schnorr, typed data and Ed25519-style
-accounts without putting any of those rules into `hardware-wallet-core`.
+exercise UTXO/account/message models and secp256k1/Ed25519 signing without putting any of
+those rules into `hardware-wallet-core`.
