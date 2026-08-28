@@ -17,6 +17,7 @@ const EIP1559_UNSIGNED_FIELDS: usize = 9;
 const EIP1559_SIGNED_FIELDS: usize = 12;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Request {
     ShowAddress(KeyTarget),
     ExportPublicKey(KeyTarget),
@@ -99,12 +100,14 @@ impl Eip1559Review {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Review {
     PublicKey { kind: OperationKind, key: KeyTarget },
     Eip1559(Eip1559Review),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Response {
     PublicKey(BoundedBytes<MAX_PUBLIC_KEY_BYTES>),
     SignedTransaction(BoundedBytes<MAX_SIGNED_TX_BYTES>),
@@ -148,6 +151,7 @@ enum ExecutionStage {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 enum ExecutionKind {
     PublicKey {
         key: hardware_wallet_chain_api::KeyLocator,
