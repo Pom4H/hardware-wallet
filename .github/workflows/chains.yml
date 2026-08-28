@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/chains.yml
       - crates/chain-api/**
+      - crates/crypto-runtime/**
       - crates/chain-bitcoin/**
       - crates/chain-ethereum/**
       - crates/chain-solana/**
@@ -12,6 +13,7 @@ on:
     paths:
       - .github/workflows/chains.yml
       - crates/chain-api/**
+      - crates/crypto-runtime/**
       - crates/chain-bitcoin/**
       - crates/chain-ethereum/**
       - crates/chain-solana/**
@@ -37,7 +39,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # Pin the external sandbox to an exact green commit, never to main.
       - name: Start local chain
         uses: Pom4H/chain-sandbox@fd34c73ddfb1509bd5c09020c6140918733cde0f
         with:
@@ -67,7 +68,6 @@ jobs:
                 --header 'content-type: application/json' \
                 --data-binary '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
                 "$SOLANA_RPC_URL" | grep -q '"ok"'
-              test -f "$SOLANA_TEST_KEYPAIR"
               test "$SOLANA_TEST_PUBKEY" = '9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj'
               test -x "$SOLANA_CLI"
               ;;
@@ -76,14 +76,14 @@ jobs:
       - name: Run chain crate tests
         run: cargo test -p "${{ matrix.package }}"
 
-      - name: Run Bitcoin PSBT e2e
+      - name: Run Bitcoin crypto-runtime e2e
         if: matrix.chain == 'bitcoin'
-        run: cargo run -p hardware-wallet-chain-bitcoin --example e2e
+        run: cargo run -p hardware-wallet-chain-bitcoin --example bitcoin_e2e
 
-      - name: Run Ethereum signed-transaction e2e
+      - name: Run Ethereum crypto-runtime e2e
         if: matrix.chain == 'ethereum'
-        run: cargo run -p hardware-wallet-chain-ethereum --example e2e
+        run: cargo run -p hardware-wallet-chain-ethereum --example ethereum_e2e
 
-      - name: Run Solana signed-transaction e2e
+      - name: Run Solana crypto-runtime e2e
         if: matrix.chain == 'solana'
-        run: cargo run -p hardware-wallet-chain-solana --example e2e
+        run: cargo run -p hardware-wallet-chain-solana --example solana_e2e

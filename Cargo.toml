@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/wallet-core",
     "crates/chain-api",
+    "crates/crypto-runtime",
     "crates/chain-bitcoin",
     "crates/chain-ethereum",
     "crates/chain-solana",

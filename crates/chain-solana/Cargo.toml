@@ -10,6 +10,7 @@ hardware-wallet-chain-api = { path = "../chain-api" }
 
 [dev-dependencies]
 hardware-wallet-core = { path = "../wallet-core" }
+hardware-wallet-crypto-runtime = { path = "../crypto-runtime" }
 
 [lints]
 workspace = true

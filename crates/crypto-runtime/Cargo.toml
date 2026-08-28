@@ -1,0 +1,20 @@
+[package]
+name = "hardware-wallet-crypto-runtime"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hardware-wallet-chain-api = { path = "../chain-api" }
+hardware-wallet-core = { path = "../wallet-core" }
+ed25519-dalek = { version = "3.0.0", default-features = false, features = ["fast", "zeroize"] }
+k256 = { version = "0.14.0", default-features = false, features = ["ecdsa", "sha256"] }
+ripemd = { version = "0.2.0", default-features = false }
+sha2 = { version = "0.11.0", default-features = false }
+sha3 = { version = "0.12.0", default-features = false }
+signature = { version = "3", default-features = false }
+zeroize = { version = "1.8", default-features = false }
+
+[lints]
+workspace = true

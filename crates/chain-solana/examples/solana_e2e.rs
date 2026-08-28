@@ -1,14 +1,12 @@
 use std::{env, process::Command, thread, time::Duration};
 
-use hardware_wallet_chain_api::{
-    BoundedBytes, ChainExecution, ChainModule, CryptoOperation, CryptoOutput, ExecutionStep,
-    HashAlgorithm, PublicKeyFormat, SignatureScheme,
-};
+use hardware_wallet_chain_api::{ChainExecution, ChainModule, CryptoOperation, ExecutionStep};
 use hardware_wallet_chain_solana::{Request, Response, Solana, encode_system_transfer};
 use hardware_wallet_core::{
-    AccountId, AuthId, Event, HostId, HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId,
-    SetupId, State, WalletContextId, update,
+    AccountId, AuthId, DerivationPath, Event, HostId, HostTrust, KeyPurpose, KeyTarget,
+    PassphraseMode, SessionId, SetupId, State, WalletContextId, update,
 };
+use hardware_wallet_crypto_runtime::{CryptoRuntime, SoftwareKeyBackend};
 
 const RECIPIENT: &str = "GcQfK48DV9BzDuDeCyV2sShbAAY4vqmK8JSj1NBrwoVZ";
 
@@ -16,7 +14,6 @@ fn main() {
     let rpc = env::var("SOLANA_RPC_URL").expect("SOLANA_RPC_URL from chain-sandbox");
     let signer_text =
         env::var("SOLANA_TEST_PUBKEY").expect("SOLANA_TEST_PUBKEY from chain-sandbox");
-    let keypair = env::var("SOLANA_TEST_KEYPAIR").expect("SOLANA_TEST_KEYPAIR from chain-sandbox");
     let cli = env::var("SOLANA_CLI").expect("SOLANA_CLI from chain-sandbox");
 
     fund_recipient(&cli, &rpc);
@@ -26,59 +23,36 @@ fn main() {
     let blockhash = decode_base58::<32>(&blockhash_text);
     let message = encode_system_transfer(signer, recipient, blockhash, 1).expect("message fits");
 
+    let target = key_target();
     let request = Request::SignSystemTransfer {
-        key: KeyTarget {
-            account: AccountId(0),
-            path: hardware_wallet_core::DerivationPath::new(),
-            purpose: KeyPurpose::ExternalAddress,
-        },
-        message: message.clone(),
+        key: target,
+        message,
     };
     let review = Solana::prepare_review(&request).expect("device parses system transfer");
-    let mut execution = Solana::prepare_execution(&review, unlocked_context()).expect("execution");
+    let mut execution =
+        Solana::prepare_execution(&review, unlocked_context()).expect("approved execution");
 
-    let derive = execution.next(None).expect("derive step");
-    assert!(matches!(
-        derive,
-        ExecutionStep::Crypto(CryptoOperation::DerivePublicKey {
-            format: PublicKeyFormat::Raw,
-            ..
-        })
-    ));
+    let mut secret = [0_u8; 32];
+    for (index, byte) in secret.iter_mut().enumerate() {
+        *byte = u8::try_from(index + 1).expect("1..=32 fits u8");
+    }
+    let backend = SoftwareKeyBackend::ed25519(WalletContextId(4), target, secret);
+    let runtime = CryptoRuntime::new(backend);
 
-    let public_key = CryptoOutput::PublicKey {
-        format: PublicKeyFormat::Raw,
-        bytes: BoundedBytes::from_slice(&signer).expect("pubkey fits"),
-    };
-    let signing = execution
-        .next(Some(&public_key))
-        .expect("matching signer permits signing");
-    let ExecutionStep::Crypto(CryptoOperation::Sign {
-        scheme,
-        prehash,
-        payload,
-        ..
-    }) = signing
-    else {
-        panic!("transfer must request Ed25519 signing after key validation")
-    };
-    assert_eq!(scheme, SignatureScheme::Ed25519);
-    assert_eq!(prehash, HashAlgorithm::None);
-    assert_eq!(execution.payload(payload), Some(message.as_slice()));
-
-    let reference_signature =
-        reference_signature(&cli, &rpc, &keypair, &signer_text, &blockhash_text);
-    let signature_bytes = decode_base58::<64>(&reference_signature);
-    let crypto_signature = CryptoOutput::Signature {
-        scheme: SignatureScheme::Ed25519,
-        bytes: BoundedBytes::from_slice(&signature_bytes).expect("signature fits"),
-        recovery_id: None,
-    };
-    let completed = execution
-        .next(Some(&crypto_signature))
-        .expect("signature finalizes transaction");
-    let ExecutionStep::Complete(Response::SignedTransaction(transaction)) = completed else {
-        panic!("transfer must complete with signed transaction")
+    let mut step = execution.next(None).expect("first execution step");
+    let transaction = loop {
+        match step {
+            ExecutionStep::Crypto(operation) => {
+                let output = execute_crypto(&runtime, &execution, operation);
+                step = execution
+                    .next(Some(&output))
+                    .expect("chain accepts runtime output");
+            }
+            ExecutionStep::Complete(Response::SignedTransaction(raw)) => break raw,
+            ExecutionStep::Complete(Response::PublicKey(_)) => {
+                panic!("transfer unexpectedly completed with a public key")
+            }
+        }
     };
 
     let encoded = encode_base64(transaction.as_slice());
@@ -89,10 +63,33 @@ fn main() {
     ]
     .concat();
     let sent_signature = result_string(&rpc_call(&rpc, &send));
-    assert_eq!(sent_signature, reference_signature);
     wait_for_confirmation(&rpc, &sent_signature);
 
-    println!("solana e2e: {sent_signature}");
+    println!("solana crypto-runtime e2e: {sent_signature}");
+}
+
+fn execute_crypto(
+    runtime: &CryptoRuntime<SoftwareKeyBackend>,
+    execution: &hardware_wallet_chain_solana::Execution,
+    operation: CryptoOperation,
+) -> hardware_wallet_chain_api::CryptoOutput {
+    let payload = match operation {
+        CryptoOperation::DerivePublicKey { .. } => None,
+        CryptoOperation::Hash { payload, .. } | CryptoOperation::Sign { payload, .. } => execution
+            .payload(payload)
+            .or_else(|| panic!("missing chain-owned payload {payload:?}")),
+    };
+    runtime
+        .execute(operation, payload)
+        .expect("software crypto runtime executes approved operation")
+}
+
+fn key_target() -> KeyTarget {
+    KeyTarget {
+        account: AccountId(0),
+        path: DerivationPath::new(),
+        purpose: KeyPurpose::ExternalAddress,
+    }
 }
 
 fn fund_recipient(cli: &str, rpc: &str) {
@@ -105,48 +102,6 @@ fn fund_recipient(cli: &str, rpc: &str) {
         "recipient airdrop failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-fn reference_signature(
-    cli: &str,
-    rpc: &str,
-    keypair: &str,
-    signer: &str,
-    blockhash: &str,
-) -> String {
-    let output = Command::new(cli)
-        .args([
-            "transfer",
-            RECIPIENT,
-            "0.000000001",
-            "--allow-unfunded-recipient",
-            "--from",
-            signer,
-            "--fee-payer",
-            keypair,
-            "--blockhash",
-            blockhash,
-            "--sign-only",
-            "--keypair",
-            keypair,
-            "--url",
-            rpc,
-        ])
-        .output()
-        .expect("solana transfer --sign-only must run");
-    assert!(
-        output.status.success(),
-        "reference signing failed: {}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8(output.stdout).expect("CLI output is UTF-8");
-    let prefix = format!("{signer}=");
-    stdout
-        .lines()
-        .find_map(|line| line.trim().strip_prefix(&prefix))
-        .unwrap_or_else(|| panic!("signature not found in CLI output: {stdout}"))
-        .to_owned()
 }
 
 fn latest_blockhash(rpc: &str) -> String {
@@ -164,7 +119,6 @@ fn wait_for_confirmation(rpc: &str, signature: &str) {
         "\"],{\"searchTransactionHistory\":true}]}",
     ]
     .concat();
-
     for _ in 0..50 {
         let response = rpc_call(rpc, &request);
         if response.contains("\"err\":null")
@@ -255,26 +209,27 @@ fn json_string_after(response: &str, marker: &str) -> String {
 }
 
 fn decode_base58<const N: usize>(value: &str) -> [u8; N] {
-    const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    const ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     let mut output = [0_u8; N];
     for character in value.bytes() {
         let digit = ALPHABET
             .iter()
             .position(|candidate| *candidate == character)
             .unwrap_or_else(|| panic!("invalid base58 character"));
-        let mut carry = u32::try_from(digit).expect("base58 alphabet index fits u32");
+        let mut carry = u32::try_from(digit).expect("base58 digit fits");
         for byte in output.iter_mut().rev() {
             let accumulator = u32::from(*byte) * 58 + carry;
-            *byte = (accumulator & 0xff) as u8;
+            *byte = u8::try_from(accumulator & 0xff).expect("masked byte fits");
             carry = accumulator >> 8;
         }
-        assert_eq!(carry, 0, "base58 value exceeds fixed output size");
+        assert_eq!(carry, 0, "base58 value exceeds fixed output");
     }
     output
 }
 
 fn encode_base64(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let a = chunk[0];

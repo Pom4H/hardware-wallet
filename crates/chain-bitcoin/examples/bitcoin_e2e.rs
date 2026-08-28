@@ -1,170 +1,93 @@
-use std::{
-    env,
-    io::Write,
-    process::{Command, Stdio},
-};
+use std::{env, process::Command};
 
-use hardware_wallet_chain_api::{
-    BoundedBytes, ChainExecution, ChainModule, CryptoOperation, CryptoOutput, Curve, ExecutionStep,
-    HashAlgorithm, PublicKeyFormat, SignatureScheme,
-};
-use hardware_wallet_chain_bitcoin::{
-    Bitcoin, MAX_PSBT_BYTES, Request, Response, extract_p2wpkh_witness,
-};
+use hardware_wallet_chain_api::{ChainExecution, ChainModule, CryptoOperation, ExecutionStep};
+use hardware_wallet_chain_bitcoin::{Bitcoin, MAX_PSBT_BYTES, Request, Response};
 use hardware_wallet_core::{
-    AccountId, AuthId, Event, HostId, HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId,
-    SetupId, State, WalletContextId, update,
+    AccountId, AuthId, DerivationPath, Event, HostId, HostTrust, KeyPurpose, KeyTarget,
+    PassphraseMode, SessionId, SetupId, State, WalletContextId, update,
 };
+use hardware_wallet_crypto_runtime::{CryptoRuntime, SoftwareKeyBackend};
 
 fn main() {
     let rpc = env::var("BITCOIN_RPC_URL").expect("BITCOIN_RPC_URL from chain-sandbox");
     let signer_wallet = env::var("BITCOIN_SIGNER_WALLET").expect("signer wallet from sandbox");
-    let expected_pubkey =
-        decode_hex(&env::var("BITCOIN_TEST_PUBKEY").expect("test pubkey from sandbox"));
-    assert_eq!(expected_pubkey.len(), 33);
-
     let sandbox_rpc = wallet_url(&rpc, "sandbox");
     let signer_rpc = wallet_url(&rpc, &signer_wallet);
+
     let destination = rpc_result_string(&rpc_call(
         &sandbox_rpc,
         "getnewaddress",
         "[\"\",\"bech32\"]",
     ));
-
     let funded_params = format!(
         "[[],[{{\"{destination}\":1.0}}],0,{{\"add_inputs\":true,\"subtractFeeFromOutputs\":[0],\"replaceable\":false}},true]"
     );
     let funded = rpc_call(&signer_rpc, "walletcreatefundedpsbt", &funded_params);
     let psbt_base64 = json_field_string(&funded, "psbt");
     let psbt_bytes = decode_base64(&psbt_base64);
-    let psbt =
-        BoundedBytes::<MAX_PSBT_BYTES>::from_slice(&psbt_bytes).expect("PSBT fits firmware budget");
+    let psbt = hardware_wallet_chain_api::BoundedBytes::<MAX_PSBT_BYTES>::from_slice(&psbt_bytes)
+        .expect("PSBT fits firmware budget");
 
-    let request = Request::SignPsbt {
-        key: KeyTarget {
-            account: AccountId(0),
-            path: hardware_wallet_core::DerivationPath::new(),
-            purpose: KeyPurpose::ExternalAddress,
-        },
-        psbt,
-    };
+    let target = key_target();
+    let request = Request::SignPsbt { key: target, psbt };
     let review = Bitcoin::prepare_review(&request).expect("device parses Core PSBT");
-
-    let process_params = format!("[\"{psbt_base64}\",true,\"ALL\",true]");
-    let processed = rpc_call(&signer_rpc, "walletprocesspsbt", &process_params);
-    let signed_psbt = json_field_string(&processed, "psbt");
-    let finalize_params = format!("[\"{signed_psbt}\",true]");
-    let finalized = rpc_call(&signer_rpc, "finalizepsbt", &finalize_params);
-    let reference_hex = json_field_string(&finalized, "hex");
-    let reference_raw = decode_hex(&reference_hex);
-    let witness = extract_p2wpkh_witness(&reference_raw).expect("Core reference is P2WPKH");
-    assert_eq!(witness.public_key.as_slice(), expected_pubkey.as_slice());
-
     let mut execution =
         Bitcoin::prepare_execution(&review, unlocked_context()).expect("approved execution");
-    let mut step = execution.next(None).expect("first execution step");
 
-    let ours = loop {
-        let output = match step {
-            ExecutionStep::Crypto(operation) => execute_crypto(&execution, operation, witness),
+    let mut secret = [0_u8; 32];
+    secret[31] = 1;
+    let backend = SoftwareKeyBackend::secp256k1(WalletContextId(4), target, secret)
+        .expect("known regtest key is valid");
+    let runtime = CryptoRuntime::new(backend);
+
+    let mut step = execution.next(None).expect("first execution step");
+    let signed = loop {
+        match step {
+            ExecutionStep::Crypto(operation) => {
+                let output = execute_crypto(&runtime, &execution, operation);
+                step = execution
+                    .next(Some(&output))
+                    .expect("chain accepts runtime output");
+            }
             ExecutionStep::Complete(Response::SignedTransaction(raw)) => break raw,
             ExecutionStep::Complete(Response::PublicKey(_)) => {
                 panic!("PSBT signing unexpectedly completed with a public key")
             }
-        };
-        step = execution
-            .next(Some(&output))
-            .expect("chain execution accepts runtime output");
+        }
     };
 
-    assert_eq!(ours.as_slice(), reference_raw.as_slice());
-
-    let send_params = format!("[\"{}\"]", encode_hex(ours.as_slice()));
+    let send_params = format!("[\"{}\"]", encode_hex(signed.as_slice()));
     let send_response = rpc_call(&rpc, "sendrawtransaction", &send_params);
     let txid = rpc_result_string(&send_response);
     assert_eq!(txid.len(), 64);
     let mempool = rpc_call(&rpc, "getmempoolentry", &format!("[\"{txid}\"]"));
     assert!(mempool.contains("\"result\""));
 
-    println!("bitcoin e2e: {txid}");
+    println!("bitcoin crypto-runtime e2e: {txid}");
 }
 
 fn execute_crypto(
+    runtime: &CryptoRuntime<SoftwareKeyBackend>,
     execution: &hardware_wallet_chain_bitcoin::Execution,
     operation: CryptoOperation,
-    witness: hardware_wallet_chain_bitcoin::P2wpkhWitness,
-) -> CryptoOutput {
-    match operation {
-        CryptoOperation::DerivePublicKey { format, .. } => {
-            assert_eq!(format, PublicKeyFormat::Compressed);
-            CryptoOutput::PublicKey {
-                format,
-                bytes: BoundedBytes::from_slice(&witness.public_key).expect("pubkey fits"),
-            }
-        }
-        CryptoOperation::Hash { algorithm, payload } => {
-            let bytes = execution
-                .payload(payload)
-                .unwrap_or_else(|| panic!("missing payload {payload:?}"));
-            let digest = match algorithm {
-                HashAlgorithm::Hash160 => hash160(bytes),
-                HashAlgorithm::DoubleSha256 => double_sha256(bytes),
-                _ => panic!("unexpected Bitcoin hash algorithm: {algorithm:?}"),
-            };
-            CryptoOutput::Digest {
-                algorithm,
-                bytes: BoundedBytes::from_slice(&digest).expect("digest fits"),
-            }
-        }
-        CryptoOperation::Sign {
-            scheme,
-            prehash,
-            payload,
-            ..
-        } => {
-            assert_eq!(
-                scheme,
-                SignatureScheme::Ecdsa {
-                    curve: Curve::Secp256k1,
-                    recoverable: false,
-                }
-            );
-            assert_eq!(prehash, HashAlgorithm::DoubleSha256);
-            assert!(execution.payload(payload).is_some());
-            CryptoOutput::Signature {
-                scheme,
-                bytes: BoundedBytes::from_slice(&witness.compact_signature)
-                    .expect("signature fits"),
-                recovery_id: None,
-            }
-        }
+) -> hardware_wallet_chain_api::CryptoOutput {
+    let payload = match operation {
+        CryptoOperation::DerivePublicKey { .. } => None,
+        CryptoOperation::Hash { payload, .. } | CryptoOperation::Sign { payload, .. } => execution
+            .payload(payload)
+            .or_else(|| panic!("missing chain-owned payload {payload:?}")),
+    };
+    runtime
+        .execute(operation, payload)
+        .expect("software crypto runtime executes approved operation")
+}
+
+fn key_target() -> KeyTarget {
+    KeyTarget {
+        account: AccountId(0),
+        path: DerivationPath::new(),
+        purpose: KeyPurpose::ExternalAddress,
     }
-}
-
-fn hash160(input: &[u8]) -> Vec<u8> {
-    digest_once("-ripemd160", &digest_once("-sha256", input))
-}
-
-fn double_sha256(input: &[u8]) -> Vec<u8> {
-    digest_once("-sha256", &digest_once("-sha256", input))
-}
-
-fn digest_once(algorithm: &str, input: &[u8]) -> Vec<u8> {
-    let mut child = Command::new("openssl")
-        .args(["dgst", algorithm, "-binary"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("openssl must be installed on the CI runner");
-    child
-        .stdin
-        .as_mut()
-        .expect("openssl stdin")
-        .write_all(input)
-        .expect("write digest input");
-    let output = child.wait_with_output().expect("wait for openssl");
-    assert!(output.status.success(), "openssl digest failed");
-    output.stdout
 }
 
 fn unlocked_context() -> hardware_wallet_core::ExecutionContext {
@@ -272,24 +195,6 @@ fn encode_hex(value: &[u8]) -> String {
         output.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     output
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    assert_eq!(value.len() % 2, 0, "hex length must be even");
-    value
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|pair| (hex_nibble(pair[0]) << 4) | hex_nibble(pair[1]))
-        .collect()
-}
-
-fn hex_nibble(value: u8) -> u8 {
-    match value {
-        b'0'..=b'9' => value - b'0',
-        b'a'..=b'f' => value - b'a' + 10,
-        b'A'..=b'F' => value - b'A' + 10,
-        _ => panic!("invalid hex digit"),
-    }
 }
 
 fn decode_base64(value: &str) -> Vec<u8> {

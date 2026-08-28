@@ -1,19 +1,16 @@
 use std::{env, process::Command, thread, time::Duration};
 
-use hardware_wallet_chain_api::{
-    BoundedBytes, ChainExecution, ChainModule, CryptoOutput, Curve, ExecutionStep, HashAlgorithm,
-    SignatureScheme,
-};
-use hardware_wallet_chain_ethereum::{
-    Ethereum, Request, Response, encode_native_transfer, signature_from_signed_eip1559,
-};
+use hardware_wallet_chain_api::{ChainExecution, ChainModule, CryptoOperation, ExecutionStep};
+use hardware_wallet_chain_ethereum::{Ethereum, Request, Response, encode_native_transfer};
 use hardware_wallet_core::{
-    AccountId, AuthId, Event, HostId, HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId,
-    SetupId, State, WalletContextId, update,
+    AccountId, AuthId, DerivationPath, Event, HostId, HostTrust, KeyPurpose, KeyTarget,
+    PassphraseMode, SessionId, SetupId, State, WalletContextId, update,
 };
+use hardware_wallet_crypto_runtime::{CryptoRuntime, SoftwareKeyBackend};
 
-const FIRST_ACCOUNT: &str = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 const SECOND_ACCOUNT: &str = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8";
+const FIRST_ACCOUNT_SECRET: &str =
+    "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 fn main() {
     let rpc = env::var("ETHEREUM_RPC_URL").expect("ETHEREUM_RPC_URL from chain-sandbox");
@@ -29,86 +26,79 @@ fn main() {
     )
     .expect("fixture must encode");
 
+    let target = key_target();
     let request = Request::SignEip1559 {
-        key: KeyTarget {
-            account: AccountId(0),
-            path: hardware_wallet_core::DerivationPath::new(),
-            purpose: KeyPurpose::ExternalAddress,
-        },
-        unsigned: unsigned.clone(),
+        key: target,
+        unsigned,
     };
     let review = Ethereum::prepare_review(&request).expect("device parses EIP-1559");
-    let context = unlocked_context();
-    let mut execution = Ethereum::prepare_execution(&review, context).expect("approved execution");
+    let mut execution =
+        Ethereum::prepare_execution(&review, unlocked_context()).expect("approved execution");
 
-    let signing = execution.next(None).expect("first execution step");
-    let ExecutionStep::Crypto(operation) = signing else {
-        panic!("EIP-1559 must request a signature")
-    };
-    let hardware_wallet_core::CryptoOperation::Sign {
-        scheme,
-        prehash,
-        payload,
-        ..
-    } = operation
-    else {
-        panic!("EIP-1559 must sign")
-    };
-    assert_eq!(
-        scheme,
-        SignatureScheme::Ecdsa {
-            curve: Curve::Secp256k1,
-            recoverable: true,
+    let secret_vec = decode_hex(FIRST_ACCOUNT_SECRET);
+    let mut secret = [0_u8; 32];
+    secret.copy_from_slice(&secret_vec);
+    let backend = SoftwareKeyBackend::secp256k1(WalletContextId(4), target, secret)
+        .expect("Anvil test key is valid");
+    let runtime = CryptoRuntime::new(backend);
+
+    let mut step = execution.next(None).expect("first execution step");
+    let signed = loop {
+        match step {
+            ExecutionStep::Crypto(operation) => {
+                let output = execute_crypto(&runtime, &execution, operation);
+                step = execution
+                    .next(Some(&output))
+                    .expect("chain accepts runtime output");
+            }
+            ExecutionStep::Complete(Response::SignedTransaction(raw)) => break raw,
+            ExecutionStep::Complete(Response::PublicKey(_)) => {
+                panic!("transaction unexpectedly completed with a public key")
+            }
         }
-    );
-    assert_eq!(prehash, HashAlgorithm::Keccak256);
-    assert_eq!(execution.payload(payload), Some(unsigned.as_slice()));
-
-    let sign_request = [
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_signTransaction\",\"params\":[{\"type\":\"0x2\",\"from\":\"",
-        FIRST_ACCOUNT,
-        "\",\"to\":\"",
-        SECOND_ACCOUNT,
-        "\",\"nonce\":\"0x0\",\"value\":\"0x1\",\"gas\":\"0x5208\",\"maxPriorityFeePerGas\":\"0x3b9aca00\",\"maxFeePerGas\":\"0x77359400\",\"chainId\":\"0x7a69\",\"data\":\"0x\",\"accessList\":[]}]}",
-    ]
-    .concat();
-    let signed_by_anvil = result_hex(&rpc_call(&rpc, &sign_request));
-    let signed_bytes = decode_hex(&signed_by_anvil);
-    let signature =
-        signature_from_signed_eip1559(&signed_bytes).expect("Anvil signed envelope parses");
-
-    let crypto_output = CryptoOutput::Signature {
-        scheme,
-        bytes: BoundedBytes::from_slice(&signature.compact).expect("compact signature fits"),
-        recovery_id: Some(signature.y_parity),
     };
-    let completed = execution
-        .next(Some(&crypto_output))
-        .expect("signature finalizes transaction");
-    let ExecutionStep::Complete(Response::SignedTransaction(ours)) = completed else {
-        panic!("EIP-1559 execution must complete with a signed transaction")
-    };
-    assert_eq!(ours.as_slice(), signed_bytes.as_slice());
 
     let send_request = format!(
         "{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"eth_sendRawTransaction\",\"params\":[\"0x{}\"]}}",
-        encode_hex(ours.as_slice())
+        encode_hex(signed.as_slice())
     );
-    let send_response = rpc_call(&rpc, &send_request);
-    let tx_hash = result_hex(&send_response);
+    let tx_hash = result_hex(&rpc_call(&rpc, &send_request));
     assert_eq!(tx_hash.len(), 64);
 
     let receipt = wait_for_receipt(&rpc, &tx_hash);
     assert!(receipt.contains("\"status\":\"0x1\""), "{receipt}");
 
-    println!("ethereum e2e: 0x{tx_hash}");
+    println!("ethereum crypto-runtime e2e: 0x{tx_hash}");
+}
+
+fn execute_crypto(
+    runtime: &CryptoRuntime<SoftwareKeyBackend>,
+    execution: &hardware_wallet_chain_ethereum::Execution,
+    operation: CryptoOperation,
+) -> hardware_wallet_chain_api::CryptoOutput {
+    let payload = match operation {
+        CryptoOperation::DerivePublicKey { .. } => None,
+        CryptoOperation::Hash { payload, .. } | CryptoOperation::Sign { payload, .. } => execution
+            .payload(payload)
+            .or_else(|| panic!("missing chain-owned payload {payload:?}")),
+    };
+    runtime
+        .execute(operation, payload)
+        .expect("software crypto runtime executes approved operation")
+}
+
+fn key_target() -> KeyTarget {
+    KeyTarget {
+        account: AccountId(0),
+        path: DerivationPath::new(),
+        purpose: KeyPurpose::ExternalAddress,
+    }
 }
 
 fn wait_for_receipt(rpc: &str, tx_hash: &str) -> String {
     let request = format!(
         "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"eth_getTransactionReceipt\",\"params\":[\"0x{tx_hash}\"]}}"
     );
-
     for _ in 0..50 {
         let response = rpc_call(rpc, &request);
         if response.contains("\"status\":\"0x1\"") {
@@ -120,7 +110,6 @@ fn wait_for_receipt(rpc: &str, tx_hash: &str) -> String {
         );
         thread::sleep(Duration::from_millis(100));
     }
-
     panic!("transaction 0x{tx_hash} was accepted but no successful receipt appeared")
 }
 
