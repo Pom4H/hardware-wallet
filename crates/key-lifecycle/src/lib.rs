@@ -173,10 +173,7 @@ where
     ///
     /// Returns an error if another provisioning flow is already staged, entropy
     /// generation fails, or BIP-39 rejects the generated entropy length.
-    pub fn begin_create(
-        &mut self,
-        size: MnemonicSize,
-    ) -> Result<(), Error<S::Error, E::Error>> {
+    pub fn begin_create(&mut self, size: MnemonicSize) -> Result<(), Error<S::Error, E::Error>> {
         if self.pending.is_some() {
             return Err(Error::PendingProvisioning);
         }
@@ -186,8 +183,8 @@ where
         self.entropy
             .fill(&mut entropy[..len])
             .map_err(Error::Entropy)?;
-        let mnemonic = Mnemonic::from_entropy_in(Language::English, &entropy[..len])
-            .map_err(Error::Bip39)?;
+        let mnemonic =
+            Mnemonic::from_entropy_in(Language::English, &entropy[..len]).map_err(Error::Bip39)?;
         self.pending = Some(PendingRoot {
             entropy,
             len: u8::try_from(len).map_err(|_| Error::InvalidStoredRoot)?,
@@ -202,10 +199,7 @@ where
     ///
     /// Returns an error when another provisioning flow is already staged or the
     /// mnemonic decodes to an unsupported root length.
-    pub fn begin_recovery(
-        &mut self,
-        mnemonic: Mnemonic,
-    ) -> Result<(), Error<S::Error, E::Error>> {
+    pub fn begin_recovery(&mut self, mnemonic: Mnemonic) -> Result<(), Error<S::Error, E::Error>> {
         if self.pending.is_some() {
             return Err(Error::PendingProvisioning);
         }
@@ -239,10 +233,7 @@ where
     /// Returns an error when no root is staged or the secure store fails. A
     /// failed store operation leaves the pending root available for retry.
     pub fn commit_pending(&mut self) -> Result<(), Error<S::Error, E::Error>> {
-        let pending = self
-            .pending
-            .as_ref()
-            .ok_or(Error::NoPendingProvisioning)?;
+        let pending = self.pending.as_ref().ok_or(Error::NoPendingProvisioning)?;
         let len = usize::from(pending.len);
         self.store
             .persist_root(&pending.entropy[..len])
@@ -462,14 +453,16 @@ mod tests {
             .expect("generate mnemonic");
         let mnemonic = lifecycle.pending_mnemonic().expect("pending backup");
         let expected = [
-            "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
-            "abandon", "abandon", "abandon", "abandon", "about",
+            "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon",
+            "abandon", "abandon", "abandon", "about",
         ];
         assert!(mnemonic.words().eq(expected));
 
         lifecycle.commit_pending().expect("persist root");
         let passphrase = NormalizedPassphrase::from_ascii("TREZOR").expect("ASCII passphrase");
-        let context = lifecycle.open_context(&passphrase).expect("derive BIP39 seed");
+        let context = lifecycle
+            .open_context(&passphrase)
+            .expect("derive BIP39 seed");
         assert_eq!(
             context.seed(),
             &decode_hex::<64>(
@@ -482,27 +475,33 @@ mod tests {
     #[test]
     fn recovery_and_reboot_reopen_same_seed() {
         let mnemonic = Mnemonic::from_entropy(&[0_u8; 16]).expect("vector mnemonic");
-        let mut lifecycle = KeyLifecycle::new(
-            MemorySecretStore::new(),
-            FixedEntropySource::new([7; 32]),
-        );
-        lifecycle.begin_recovery(mnemonic).expect("stage recovery");
-        lifecycle.commit_pending().expect("persist recovered root");
+        let mut lifecycle =
+            KeyLifecycle::new(MemorySecretStore::new(), FixedEntropySource::new([7; 32]));
+        lifecycle
+            .begin_recovery(mnemonic)
+            .expect("stage recovery");
+        lifecycle
+            .commit_pending()
+            .expect("persist recovered root");
         let empty = NormalizedPassphrase::empty();
-        let before = *lifecycle.open_context(&empty).expect("open before reboot").seed();
+        let before = *lifecycle
+            .open_context(&empty)
+            .expect("open before reboot")
+            .seed();
 
         let (store, entropy) = lifecycle.into_parts();
         let mut rebooted = KeyLifecycle::new(store, entropy);
-        let after = *rebooted.open_context(&empty).expect("open after reboot").seed();
+        let after = *rebooted
+            .open_context(&empty)
+            .expect("open after reboot")
+            .seed();
         assert_eq!(before, after);
     }
 
     #[test]
     fn passphrases_create_distinct_ephemeral_contexts() {
-        let mut lifecycle = KeyLifecycle::new(
-            MemorySecretStore::new(),
-            FixedEntropySource::new([3; 32]),
-        );
+        let mut lifecycle =
+            KeyLifecycle::new(MemorySecretStore::new(), FixedEntropySource::new([3; 32]));
         lifecycle
             .begin_create(MnemonicSize::Words24)
             .expect("create");
@@ -520,10 +519,8 @@ mod tests {
 
     #[test]
     fn uncommitted_root_disappears_on_cancel() {
-        let mut lifecycle = KeyLifecycle::new(
-            MemorySecretStore::new(),
-            FixedEntropySource::new([5; 32]),
-        );
+        let mut lifecycle =
+            KeyLifecycle::new(MemorySecretStore::new(), FixedEntropySource::new([5; 32]));
         lifecycle
             .begin_create(MnemonicSize::Words12)
             .expect("create");
@@ -538,10 +535,8 @@ mod tests {
 
     #[test]
     fn wipe_removes_persisted_root() {
-        let mut lifecycle = KeyLifecycle::new(
-            MemorySecretStore::new(),
-            FixedEntropySource::new([9; 32]),
-        );
+        let mut lifecycle =
+            KeyLifecycle::new(MemorySecretStore::new(), FixedEntropySource::new([9; 32]));
         lifecycle
             .begin_create(MnemonicSize::Words12)
             .expect("create");
@@ -567,7 +562,11 @@ mod tests {
         let mut output = [0_u8; N];
         let mut index = 0_usize;
         let mut high = None;
-        for byte in compact.iter().copied().filter(|byte| !byte.is_ascii_whitespace()) {
+        for byte in compact
+            .iter()
+            .copied()
+            .filter(|byte| !byte.is_ascii_whitespace())
+        {
             let nibble = match byte {
                 b'0'..=b'9' => byte - b'0',
                 b'a'..=b'f' => byte - b'a' + 10,
