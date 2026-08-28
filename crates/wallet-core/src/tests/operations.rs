@@ -105,7 +105,7 @@ fn blind_signing_is_rejected_by_default() {
 #[test]
 fn untrusted_host_can_be_forbidden_from_signing() {
     let mut policy = SecurityPolicy::strict();
-    policy.require_trusted_host_for_signing = true;
+    policy.signing_hosts = SigningHostPolicy::TrustedOnly;
 
     let setup = SetupId(1);
     let mut state = State::new(policy);
