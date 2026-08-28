@@ -1,3 +1,5 @@
+# Policy inputs for the linked Cortex-M probe and product-level projection.
+# Measured ELF values are reported separately; reserves must remain explicit.
 schema = 1
 
 [memory]
