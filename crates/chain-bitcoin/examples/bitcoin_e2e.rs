@@ -13,8 +13,8 @@ use hardware_wallet_crypto_runtime::{CryptoRuntime, SoftwareKeyBackend};
 use hardware_wallet_hd_key_backend::{HdKeyBackend, KeyFamily};
 
 const TEST_SEED: [u8; 32] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-    23, 24, 25, 26, 27, 28, 29, 30, 31,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 30, 31,
 ];
 const HD_WALLET: &str = "hardware-wallet-hd";
 
@@ -25,12 +25,8 @@ fn main() {
     let context = unlocked_context();
     let target = key_target();
     let locator = context.bind_key(target);
-    let hd = HdKeyBackend::new(
-        account_descriptor(),
-        KeyFamily::Secp256k1Bip32,
-        &TEST_SEED,
-    )
-    .expect("HD backend");
+    let hd = HdKeyBackend::new(account_descriptor(), KeyFamily::Secp256k1Bip32, &TEST_SEED)
+        .expect("HD backend");
     let backend = hd
         .software_backend(locator)
         .expect("derive BIP84 child key");
@@ -77,8 +73,7 @@ fn main() {
 
     let request = Request::SignPsbt { key: target, psbt };
     let review = Bitcoin::prepare_review(&request).expect("device parses HD-funded Core PSBT");
-    let mut execution =
-        Bitcoin::prepare_execution(&review, context).expect("approved execution");
+    let mut execution = Bitcoin::prepare_execution(&review, context).expect("approved execution");
 
     let mut step = execution.next(None).expect("first execution step");
     let signed = loop {
@@ -128,11 +123,7 @@ fn derive_public_key(
 }
 
 fn checked_descriptor(rpc: &str, descriptor: &str) -> String {
-    let info = rpc_call(
-        rpc,
-        "getdescriptorinfo",
-        &format!("[\"{descriptor}\"]"),
-    );
+    let info = rpc_call(rpc, "getdescriptorinfo", &format!("[\"{descriptor}\"]"));
     let checksum = json_field_string(&info, "checksum");
     format!("{descriptor}#{checksum}")
 }

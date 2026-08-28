@@ -14,8 +14,8 @@ use hardware_wallet_hd_key_backend::{HdKeyBackend, KeyFamily};
 
 const RECIPIENT: &str = "GcQfK48DV9BzDuDeCyV2sShbAAY4vqmK8JSj1NBrwoVZ";
 const TEST_SEED: [u8; 32] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-    23, 24, 25, 26, 27, 28, 29, 30, 31,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 30, 31,
 ];
 
 fn main() {
@@ -25,12 +25,8 @@ fn main() {
     let context = unlocked_context();
     let target = key_target();
     let locator = context.bind_key(target);
-    let hd = HdKeyBackend::new(
-        account_descriptor(),
-        KeyFamily::Ed25519Slip10,
-        &TEST_SEED,
-    )
-    .expect("HD backend");
+    let hd = HdKeyBackend::new(account_descriptor(), KeyFamily::Ed25519Slip10, &TEST_SEED)
+        .expect("HD backend");
     let backend = hd
         .software_backend(locator)
         .expect("derive Solana SLIP-0010 child key");

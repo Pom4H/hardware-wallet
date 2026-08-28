@@ -15,8 +15,8 @@ use hardware_wallet_hd_key_backend::{HdKeyBackend, KeyFamily};
 
 const DESTINATION: &str = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8";
 const TEST_SEED: [u8; 32] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-    23, 24, 25, 26, 27, 28, 29, 30, 31,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 30, 31,
 ];
 
 fn main() {
@@ -24,12 +24,8 @@ fn main() {
     let context = unlocked_context();
     let target = key_target();
     let locator = context.bind_key(target);
-    let hd = HdKeyBackend::new(
-        account_descriptor(),
-        KeyFamily::Secp256k1Bip32,
-        &TEST_SEED,
-    )
-    .expect("HD backend");
+    let hd = HdKeyBackend::new(account_descriptor(), KeyFamily::Secp256k1Bip32, &TEST_SEED)
+        .expect("HD backend");
     let backend = hd
         .software_backend(locator)
         .expect("derive Ethereum BIP44 child key");
@@ -88,7 +84,9 @@ fn main() {
         ),
     );
     assert!(
-        transaction.to_ascii_lowercase().contains(&format!("\"from\":\"{sender}\"")),
+        transaction
+            .to_ascii_lowercase()
+            .contains(&format!("\"from\":\"{sender}\"")),
         "network recovered unexpected sender: {transaction}"
     );
 
@@ -138,7 +136,7 @@ fn fund_sender(rpc: &str, sender: &str) {
         ),
     );
     assert!(
-        response.contains("\"result\":true") || response.contains("\"result\": true"),
+        response.contains("\"result\":null") || response.contains("\"result\": null"),
         "failed to fund HD account: {response}"
     );
 }
