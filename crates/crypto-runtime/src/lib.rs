@@ -3,8 +3,7 @@
 use ed25519_dalek::SigningKey as Ed25519SigningKey;
 use hardware_wallet_chain_api::{
     BoundedBytes, CryptoOperation, CryptoOutput, Curve, HashAlgorithm, KeyLocator,
-    MAX_DIGEST_BYTES, MAX_PUBLIC_KEY_BYTES, MAX_SIGNATURE_BYTES, PublicKeyFormat,
-    SignatureScheme,
+    MAX_DIGEST_BYTES, MAX_PUBLIC_KEY_BYTES, PublicKeyFormat, SignatureScheme,
 };
 use hardware_wallet_core::{KeyTarget, WalletContextId};
 use k256::{
@@ -104,22 +103,27 @@ impl SoftwareKeyBackend {
                 let signing =
                     Secp256k1SigningKey::from_slice(&secret.0).map_err(|_| Error::InvalidSecret)?;
                 let verifying = signing.verifying_key();
-                let bytes = match format {
-                    PublicKeyFormat::Compressed => verifying.to_sec1_point(true).as_bytes(),
-                    PublicKeyFormat::Uncompressed => verifying.to_sec1_point(false).as_bytes(),
+                match format {
+                    PublicKeyFormat::Compressed => {
+                        let point = verifying.to_sec1_point(true);
+                        bounded_public_key(point.as_bytes())
+                    }
+                    PublicKeyFormat::Uncompressed => {
+                        let point = verifying.to_sec1_point(false);
+                        bounded_public_key(point.as_bytes())
+                    }
                     PublicKeyFormat::XOnly => {
                         let point = verifying.to_sec1_point(false);
-                        return bounded_public_key(&point.as_bytes()[1..33]);
+                        bounded_public_key(&point.as_bytes()[1..33])
                     }
                     PublicKeyFormat::Raw => {
                         let point = verifying.to_sec1_point(false);
-                        return bounded_public_key(&point.as_bytes()[1..]);
+                        bounded_public_key(&point.as_bytes()[1..])
                     }
                     PublicKeyFormat::Extended | PublicKeyFormat::Custom(_) => {
-                        return Err(Error::UnsupportedPublicKeyFormat);
+                        Err(Error::UnsupportedPublicKeyFormat)
                     }
-                };
-                bounded_public_key(bytes)
+                }
             }
             SoftwareSecret::Ed25519(secret) => {
                 if format != PublicKeyFormat::Raw {
@@ -242,10 +246,7 @@ fn bounded_public_key(value: &[u8]) -> Result<BoundedBytes<MAX_PUBLIC_KEY_BYTES>
     BoundedBytes::from_slice(value).map_err(|_| Error::CapacityExceeded)
 }
 
-fn hash(
-    algorithm: HashAlgorithm,
-    payload: &[u8],
-) -> Result<BoundedBytes<MAX_DIGEST_BYTES>, Error> {
+fn hash(algorithm: HashAlgorithm, payload: &[u8]) -> Result<BoundedBytes<MAX_DIGEST_BYTES>, Error> {
     match algorithm {
         HashAlgorithm::Sha256 => bounded_digest(&Sha256::digest(payload)),
         HashAlgorithm::DoubleSha256 => {
@@ -323,11 +324,25 @@ mod tests {
             },
         )
         .state;
-        state = hardware_wallet_core::update(state, hardware_wallet_core::Event::KeyMaterialReady(setup)).state;
-        state = hardware_wallet_core::update(state, hardware_wallet_core::Event::BackupShown(setup)).state;
-        state = hardware_wallet_core::update(state, hardware_wallet_core::Event::BackupVerified(setup)).state;
-        state = hardware_wallet_core::update(state, hardware_wallet_core::Event::PinConfigured(setup)).state;
-        state = hardware_wallet_core::update(state, hardware_wallet_core::Event::ProvisioningPersisted(setup)).state;
+        state = hardware_wallet_core::update(
+            state,
+            hardware_wallet_core::Event::KeyMaterialReady(setup),
+        )
+        .state;
+        state =
+            hardware_wallet_core::update(state, hardware_wallet_core::Event::BackupShown(setup))
+                .state;
+        state =
+            hardware_wallet_core::update(state, hardware_wallet_core::Event::BackupVerified(setup))
+                .state;
+        state =
+            hardware_wallet_core::update(state, hardware_wallet_core::Event::PinConfigured(setup))
+                .state;
+        state = hardware_wallet_core::update(
+            state,
+            hardware_wallet_core::Event::ProvisioningPersisted(setup),
+        )
+        .state;
         state = hardware_wallet_core::update(
             state,
             hardware_wallet_core::Event::UnlockRequested { id: auth, host },
@@ -341,7 +356,8 @@ mod tests {
             },
         )
         .state;
-        state = hardware_wallet_core::update(state, hardware_wallet_core::Event::PinVerified(auth)).state;
+        state = hardware_wallet_core::update(state, hardware_wallet_core::Event::PinVerified(auth))
+            .state;
         state = hardware_wallet_core::update(
             state,
             hardware_wallet_core::Event::SessionOpened {
@@ -379,9 +395,9 @@ mod tests {
         assert_eq!(
             bytes.as_slice(),
             &[
-                0x02, 0x79, 0xbe, 0x66, 0x7e, 0xf9, 0xdc, 0xbb, 0xac, 0x55, 0xa0, 0x62,
-                0x95, 0xce, 0x87, 0x0b, 0x07, 0x02, 0x9b, 0xfc, 0xdb, 0x2d, 0xce, 0x28,
-                0xd9, 0x59, 0xf2, 0x81, 0x5b, 0x16, 0xf8, 0x17, 0x98,
+                0x02, 0x79, 0xbe, 0x66, 0x7e, 0xf9, 0xdc, 0xbb, 0xac, 0x55, 0xa0, 0x62, 0x95, 0xce,
+                0x87, 0x0b, 0x07, 0x02, 0x9b, 0xfc, 0xdb, 0x2d, 0xce, 0x28, 0xd9, 0x59, 0xf2, 0x81,
+                0x5b, 0x16, 0xf8, 0x17, 0x98,
             ]
         );
     }
