@@ -3,8 +3,8 @@
 use hardware_wallet_chain_api::{
     BoundedBytes, CapacityError, ChainExecution, ChainId, ChainModule, CryptoOperation,
     CryptoOutput, Curve, ExecutionContext, ExecutionStep, HashAlgorithm, Interaction, KeyTarget,
-    OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan, SignatureScheme,
-    MAX_PUBLIC_KEY_BYTES,
+    MAX_PUBLIC_KEY_BYTES, OperationKind, PayloadId, PublicKeyFormat, ReviewAssurance, ReviewPlan,
+    SignatureScheme,
 };
 
 pub struct Ethereum;
@@ -100,10 +100,7 @@ impl Eip1559Review {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Review {
-    PublicKey {
-        kind: OperationKind,
-        key: KeyTarget,
-    },
+    PublicKey { kind: OperationKind, key: KeyTarget },
     Eip1559(Eip1559Review),
 }
 
@@ -261,7 +258,9 @@ impl ChainModule for Ethereum {
             Request::SignEip1559 { key, unsigned } => {
                 Ok(Review::Eip1559(parse_eip1559(*key, unsigned)?))
             }
-            Request::SignPersonalMessage | Request::SignTypedData => Err(Error::ParserNotImplemented),
+            Request::SignPersonalMessage | Request::SignTypedData => {
+                Err(Error::ParserNotImplemented)
+            }
         }
     }
 
@@ -357,7 +356,7 @@ pub fn encode_native_transfer(
 /// Returns an [`Error`] when the envelope is malformed or does not contain a
 /// canonical 64-byte `(r,s)` signature plus parity.
 pub fn signature_from_signed_eip1559(raw: &[u8]) -> Result<Eip1559Signature, Error> {
-    let fields = parse_typed_list(raw, EIP1559_SIGNED_FIELDS)?;
+    let fields = parse_typed_list::<EIP1559_SIGNED_FIELDS>(raw)?;
     let parity = Uint256::from_rlp_scalar(fields[9].payload)?
         .as_u64()
         .ok_or(Error::InvalidSignature)?;
@@ -384,7 +383,7 @@ fn parse_eip1559(
     key: KeyTarget,
     unsigned: &BoundedBytes<MAX_UNSIGNED_TX_BYTES>,
 ) -> Result<Eip1559Review, Error> {
-    let fields = parse_typed_list(unsigned.as_slice(), EIP1559_UNSIGNED_FIELDS)?;
+    let fields = parse_typed_list::<EIP1559_UNSIGNED_FIELDS>(unsigned.as_slice())?;
     let destination_payload = fields[5].bytes_payload()?;
     if destination_payload.is_empty() {
         return Err(Error::ContractCreationUnsupported);
@@ -446,7 +445,7 @@ fn finalize_eip1559(
     unsigned: &BoundedBytes<MAX_UNSIGNED_TX_BYTES>,
     signature: Eip1559Signature,
 ) -> Result<BoundedBytes<MAX_SIGNED_TX_BYTES>, Error> {
-    let fields = parse_typed_list(unsigned.as_slice(), EIP1559_UNSIGNED_FIELDS)?;
+    let fields = parse_typed_list::<EIP1559_UNSIGNED_FIELDS>(unsigned.as_slice())?;
     let mut body = BoundedBytes::<MAX_SIGNED_TX_BYTES>::new();
     for field in fields {
         body.extend_from_slice(field.encoded)?;
@@ -469,8 +468,8 @@ struct RlpItem<'a> {
     is_list: bool,
 }
 
-impl RlpItem<'_> {
-    fn bytes_payload(self) -> Result<&[u8], Error> {
+impl<'a> RlpItem<'a> {
+    fn bytes_payload(self) -> Result<&'a [u8], Error> {
         if self.is_list {
             Err(Error::InvalidRlp)
         } else {
@@ -483,8 +482,8 @@ impl RlpItem<'_> {
     }
 }
 
-fn parse_typed_list<const N: usize>(raw: &[u8], expected: usize) -> Result<[RlpItem<'_>; N], Error> {
-    if expected != N || raw.first() != Some(&EIP1559_TYPE) {
+fn parse_typed_list<const N: usize>(raw: &[u8]) -> Result<[RlpItem<'_>; N], Error> {
+    if raw.first() != Some(&EIP1559_TYPE) {
         return Err(Error::InvalidEnvelope);
     }
     let (top, consumed) = parse_rlp_item(&raw[1..])?;
@@ -574,9 +573,7 @@ fn parse_long_item(
     is_list: bool,
 ) -> Result<(RlpItem<'_>, usize), Error> {
     let length_bytes = usize::from(length_of_length);
-    let header_end = 1_usize
-        .checked_add(length_bytes)
-        .ok_or(Error::InvalidRlp)?;
+    let header_end = 1_usize.checked_add(length_bytes).ok_or(Error::InvalidRlp)?;
     if input.len() < header_end || length_bytes == 0 || input[1] == 0 {
         return Err(Error::NonCanonicalRlp);
     }
@@ -627,10 +624,7 @@ fn rlp_push_integer_bytes<const N: usize>(
     }
 }
 
-fn rlp_push_bytes<const N: usize>(
-    output: &mut BoundedBytes<N>,
-    value: &[u8],
-) -> Result<(), Error> {
+fn rlp_push_bytes<const N: usize>(output: &mut BoundedBytes<N>, value: &[u8]) -> Result<(), Error> {
     if value.len() == 1 && value[0] < 0x80 {
         output.push(value[0])?;
         return Ok(());
@@ -721,7 +715,7 @@ mod tests {
     fn rejects_contract_calls_until_calldata_review_exists() {
         let mut raw = fixture();
         let bytes = raw.as_slice();
-        let fields = parse_typed_list(bytes, EIP1559_UNSIGNED_FIELDS).expect("fixture parses");
+        let fields = parse_typed_list::<EIP1559_UNSIGNED_FIELDS>(bytes).expect("fixture parses");
         let mut body = BoundedBytes::<MAX_UNSIGNED_TX_BYTES>::new();
         for (index, field) in fields.iter().enumerate() {
             if index == 7 {

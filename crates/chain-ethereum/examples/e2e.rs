@@ -5,11 +5,11 @@ use hardware_wallet_chain_api::{
     SignatureScheme,
 };
 use hardware_wallet_chain_ethereum::{
-    encode_native_transfer, signature_from_signed_eip1559, Ethereum, Request, Response,
+    Ethereum, Request, Response, encode_native_transfer, signature_from_signed_eip1559,
 };
 use hardware_wallet_core::{
-    update, AccountId, AuthId, Event, HostId, HostTrust, KeyPurpose, KeyTarget, PassphraseMode,
-    SessionId, SetupId, State, WalletContextId,
+    AccountId, AuthId, Event, HostId, HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId,
+    SetupId, State, WalletContextId, update,
 };
 
 const FIRST_ACCOUNT: &str = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
@@ -64,27 +64,18 @@ fn main() {
     assert_eq!(prehash, HashAlgorithm::Keccak256);
     assert_eq!(execution.payload(payload), Some(unsigned.as_slice()));
 
-    let sign_request = format!(
-        concat!(
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_signTransaction\",\"params\":[{",
-            "\"type\":\"0x2\",",
-            "\"from\":\"{}\",",
-            "\"to\":\"{}\",",
-            "\"nonce\":\"0x0\",",
-            "\"value\":\"0x1\",",
-            "\"gas\":\"0x5208\",",
-            "\"maxPriorityFeePerGas\":\"0x3b9aca00\",",
-            "\"maxFeePerGas\":\"0x77359400\",",
-            "\"chainId\":\"0x7a69\",",
-            "\"data\":\"0x\",",
-            "\"accessList\":[]",
-            "}]}}"
-        ),
-        FIRST_ACCOUNT, SECOND_ACCOUNT
-    );
+    let sign_request = [
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_signTransaction\",\"params\":[{\"type\":\"0x2\",\"from\":\"",
+    FIRST_ACCOUNT,
+    "\",\"to\":\"",
+    SECOND_ACCOUNT,
+    "\",\"nonce\":\"0x0\",\"value\":\"0x1\",\"gas\":\"0x5208\",\"maxPriorityFeePerGas\":\"0x3b9aca00\",\"maxFeePerGas\":\"0x77359400\",\"chainId\":\"0x7a69\",\"data\":\"0x\",\"accessList\":[]}]}"
+]
+.concat();
     let signed_by_anvil = result_hex(&rpc_call(&rpc, &sign_request));
     let signed_bytes = decode_hex(&signed_by_anvil);
-    let signature = signature_from_signed_eip1559(&signed_bytes).expect("Anvil signed envelope parses");
+    let signature =
+        signature_from_signed_eip1559(&signed_bytes).expect("Anvil signed envelope parses");
 
     let crypto_output = CryptoOutput::Signature {
         scheme,
@@ -180,7 +171,9 @@ fn rpc_call(url: &str, body: &str) -> String {
 
 fn result_hex(response: &str) -> String {
     let marker = "\"result\":\"0x";
-    let start = response.find(marker).unwrap_or_else(|| panic!("missing hex result: {response}"))
+    let start = response
+        .find(marker)
+        .unwrap_or_else(|| panic!("missing hex result: {response}"))
         + marker.len();
     let rest = &response[start..];
     let end = rest.find('"').expect("hex result terminator");
