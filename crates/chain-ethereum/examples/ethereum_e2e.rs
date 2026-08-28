@@ -1,20 +1,43 @@
 use std::{env, process::Command, thread, time::Duration};
 
-use hardware_wallet_chain_api::{ChainExecution, ChainModule, CryptoOperation, ExecutionStep};
+use hardware_wallet_chain_api::{
+    ChainExecution, ChainModule, CryptoOperation, CryptoOutput, ExecutionStep, HashAlgorithm,
+    PayloadId, PublicKeyFormat,
+};
 use hardware_wallet_chain_ethereum::{Ethereum, Request, Response, encode_native_transfer};
 use hardware_wallet_core::{
-    AccountId, AuthId, DerivationPath, Event, HostId, HostTrust, KeyPurpose, KeyTarget,
-    PassphraseMode, SessionId, SetupId, State, WalletContextId, update,
+    AccountDescriptor, AccountId, AccountKind, AuthId, ChildNumber, DerivationPath, Event, HostId,
+    HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId, SetupId, State, WalletContextId,
+    update,
 };
 use hardware_wallet_crypto_runtime::{CryptoRuntime, SoftwareKeyBackend};
+use hardware_wallet_hd_key_backend::{HdKeyBackend, KeyFamily};
 
-const SECOND_ACCOUNT: &str = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8";
-const FIRST_ACCOUNT_SECRET: &str =
-    "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const DESTINATION: &str = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8";
+const TEST_SEED: [u8; 32] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+    23, 24, 25, 26, 27, 28, 29, 30, 31,
+];
 
 fn main() {
     let rpc = env::var("ETHEREUM_RPC_URL").expect("ETHEREUM_RPC_URL from chain-sandbox");
-    let destination = decode_address(SECOND_ACCOUNT);
+    let context = unlocked_context();
+    let target = key_target();
+    let locator = context.bind_key(target);
+    let hd = HdKeyBackend::new(
+        account_descriptor(),
+        KeyFamily::Secp256k1Bip32,
+        &TEST_SEED,
+    )
+    .expect("HD backend");
+    let backend = hd
+        .software_backend(locator)
+        .expect("derive Ethereum BIP44 child key");
+    let runtime = CryptoRuntime::new(backend);
+    let sender = ethereum_address(&runtime, locator);
+    fund_sender(&rpc, &sender);
+
+    let destination = decode_address(DESTINATION);
     let unsigned = encode_native_transfer(
         31_337,
         0,
@@ -26,21 +49,12 @@ fn main() {
     )
     .expect("fixture must encode");
 
-    let target = key_target();
     let request = Request::SignEip1559 {
         key: target,
         unsigned,
     };
     let review = Ethereum::prepare_review(&request).expect("device parses EIP-1559");
-    let mut execution =
-        Ethereum::prepare_execution(&review, unlocked_context()).expect("approved execution");
-
-    let secret_vec = decode_hex(FIRST_ACCOUNT_SECRET);
-    let mut secret = [0_u8; 32];
-    secret.copy_from_slice(&secret_vec);
-    let backend = SoftwareKeyBackend::secp256k1(WalletContextId(4), target, secret)
-        .expect("Anvil test key is valid");
-    let runtime = CryptoRuntime::new(backend);
+    let mut execution = Ethereum::prepare_execution(&review, context).expect("approved execution");
 
     let mut step = execution.next(None).expect("first execution step");
     let signed = loop {
@@ -67,8 +81,66 @@ fn main() {
 
     let receipt = wait_for_receipt(&rpc, &tx_hash);
     assert!(receipt.contains("\"status\":\"0x1\""), "{receipt}");
+    let transaction = rpc_call(
+        &rpc,
+        &format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"eth_getTransactionByHash\",\"params\":[\"0x{tx_hash}\"]}}"
+        ),
+    );
+    assert!(
+        transaction.to_ascii_lowercase().contains(&format!("\"from\":\"{sender}\"")),
+        "network recovered unexpected sender: {transaction}"
+    );
 
-    println!("ethereum crypto-runtime e2e: 0x{tx_hash}");
+    println!("ethereum HD e2e: 0x{tx_hash} from {sender}");
+}
+
+fn ethereum_address(
+    runtime: &CryptoRuntime<SoftwareKeyBackend>,
+    locator: hardware_wallet_core::KeyLocator,
+) -> String {
+    let public = runtime
+        .execute(
+            CryptoOperation::DerivePublicKey {
+                key: locator,
+                format: PublicKeyFormat::Uncompressed,
+            },
+            None,
+        )
+        .expect("derive Ethereum public key");
+    let CryptoOutput::PublicKey { bytes, .. } = public else {
+        panic!("derive must return public key")
+    };
+    assert_eq!(bytes.len(), 65);
+    assert_eq!(bytes.as_slice()[0], 0x04);
+
+    let digest = runtime
+        .execute(
+            CryptoOperation::Hash {
+                algorithm: HashAlgorithm::Keccak256,
+                payload: PayloadId(0),
+            },
+            Some(&bytes.as_slice()[1..]),
+        )
+        .expect("Keccak public key");
+    let CryptoOutput::Digest { bytes, .. } = digest else {
+        panic!("hash must return digest")
+    };
+    assert_eq!(bytes.len(), 32);
+    format!("0x{}", encode_hex(&bytes.as_slice()[12..]))
+}
+
+fn fund_sender(rpc: &str, sender: &str) {
+    let response = rpc_call(
+        rpc,
+        &format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"anvil_setBalance\",\"params\":[\"{sender}\",\"0x56bc75e2d63100000\"]}}"
+        ),
+    );
+    assert!(
+        response.contains("\"result\":true") || response.contains("\"result\": true"),
+        "failed to fund HD account: {response}"
+    );
 }
 
 fn execute_crypto(
@@ -84,15 +156,33 @@ fn execute_crypto(
     };
     runtime
         .execute(operation, payload)
-        .expect("software crypto runtime executes approved operation")
+        .expect("HD-derived crypto runtime executes approved operation")
+}
+
+fn account_descriptor() -> AccountDescriptor {
+    AccountDescriptor {
+        id: AccountId(0),
+        wallet: WalletContextId(4),
+        kind: AccountKind::Hd,
+        root: path(&[(44, true), (60, true), (0, true)]),
+    }
 }
 
 fn key_target() -> KeyTarget {
     KeyTarget {
         account: AccountId(0),
-        path: DerivationPath::new(),
+        path: path(&[(0, false), (0, false)]),
         purpose: KeyPurpose::ExternalAddress,
     }
+}
+
+fn path(children: &[(u32, bool)]) -> DerivationPath {
+    let mut path = DerivationPath::new();
+    for &(index, hardened) in children {
+        path.push(ChildNumber::new(index, hardened).expect("valid child"))
+            .expect("path fits");
+    }
+    path
 }
 
 fn wait_for_receipt(rpc: &str, tx_hash: &str) -> String {

@@ -1,43 +1,56 @@
 use std::{env, process::Command, thread, time::Duration};
 
-use hardware_wallet_chain_api::{ChainExecution, ChainModule, CryptoOperation, ExecutionStep};
+use hardware_wallet_chain_api::{
+    ChainExecution, ChainModule, CryptoOperation, CryptoOutput, ExecutionStep, PublicKeyFormat,
+};
 use hardware_wallet_chain_solana::{Request, Response, Solana, encode_system_transfer};
 use hardware_wallet_core::{
-    AccountId, AuthId, DerivationPath, Event, HostId, HostTrust, KeyPurpose, KeyTarget,
-    PassphraseMode, SessionId, SetupId, State, WalletContextId, update,
+    AccountDescriptor, AccountId, AccountKind, AuthId, ChildNumber, DerivationPath, Event, HostId,
+    HostTrust, KeyPurpose, KeyTarget, PassphraseMode, SessionId, SetupId, State, WalletContextId,
+    update,
 };
 use hardware_wallet_crypto_runtime::{CryptoRuntime, SoftwareKeyBackend};
+use hardware_wallet_hd_key_backend::{HdKeyBackend, KeyFamily};
 
 const RECIPIENT: &str = "GcQfK48DV9BzDuDeCyV2sShbAAY4vqmK8JSj1NBrwoVZ";
+const TEST_SEED: [u8; 32] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+    23, 24, 25, 26, 27, 28, 29, 30, 31,
+];
 
 fn main() {
     let rpc = env::var("SOLANA_RPC_URL").expect("SOLANA_RPC_URL from chain-sandbox");
-    let signer_text =
-        env::var("SOLANA_TEST_PUBKEY").expect("SOLANA_TEST_PUBKEY from chain-sandbox");
     let cli = env::var("SOLANA_CLI").expect("SOLANA_CLI from chain-sandbox");
 
-    fund_recipient(&cli, &rpc);
+    let context = unlocked_context();
+    let target = key_target();
+    let locator = context.bind_key(target);
+    let hd = HdKeyBackend::new(
+        account_descriptor(),
+        KeyFamily::Ed25519Slip10,
+        &TEST_SEED,
+    )
+    .expect("HD backend");
+    let backend = hd
+        .software_backend(locator)
+        .expect("derive Solana SLIP-0010 child key");
+    let runtime = CryptoRuntime::new(backend);
+    let signer = derive_public_key(&runtime, locator);
+    let signer_text = bs58::encode(signer).into_string();
+
+    fund_address(&cli, &rpc, &signer_text, "10");
+    fund_address(&cli, &rpc, RECIPIENT, "1");
     let blockhash_text = latest_blockhash(&rpc);
-    let signer = decode_base58::<32>(&signer_text);
     let recipient = decode_base58::<32>(RECIPIENT);
     let blockhash = decode_base58::<32>(&blockhash_text);
     let message = encode_system_transfer(signer, recipient, blockhash, 1).expect("message fits");
 
-    let target = key_target();
     let request = Request::SignSystemTransfer {
         key: target,
         message,
     };
     let review = Solana::prepare_review(&request).expect("device parses system transfer");
-    let mut execution =
-        Solana::prepare_execution(&review, unlocked_context()).expect("approved execution");
-
-    let mut secret = [0_u8; 32];
-    for (index, byte) in secret.iter_mut().enumerate() {
-        *byte = u8::try_from(index + 1).expect("1..=32 fits u8");
-    }
-    let backend = SoftwareKeyBackend::ed25519(WalletContextId(4), target, secret);
-    let runtime = CryptoRuntime::new(backend);
+    let mut execution = Solana::prepare_execution(&review, context).expect("approved execution");
 
     let mut step = execution.next(None).expect("first execution step");
     let transaction = loop {
@@ -65,7 +78,28 @@ fn main() {
     let sent_signature = result_string(&rpc_call(&rpc, &send));
     wait_for_confirmation(&rpc, &sent_signature);
 
-    println!("solana crypto-runtime e2e: {sent_signature}");
+    println!("solana HD e2e: {sent_signature} from {signer_text}");
+}
+
+fn derive_public_key(
+    runtime: &CryptoRuntime<SoftwareKeyBackend>,
+    locator: hardware_wallet_core::KeyLocator,
+) -> [u8; 32] {
+    let output = runtime
+        .execute(
+            CryptoOperation::DerivePublicKey {
+                key: locator,
+                format: PublicKeyFormat::Raw,
+            },
+            None,
+        )
+        .expect("derive Solana public key");
+    let CryptoOutput::PublicKey { bytes, .. } = output else {
+        panic!("derive must return public key")
+    };
+    let mut public_key = [0_u8; 32];
+    public_key.copy_from_slice(bytes.as_slice());
+    public_key
 }
 
 fn execute_crypto(
@@ -81,25 +115,43 @@ fn execute_crypto(
     };
     runtime
         .execute(operation, payload)
-        .expect("software crypto runtime executes approved operation")
+        .expect("HD-derived crypto runtime executes approved operation")
+}
+
+fn account_descriptor() -> AccountDescriptor {
+    AccountDescriptor {
+        id: AccountId(0),
+        wallet: WalletContextId(4),
+        kind: AccountKind::Hd,
+        root: path(&[(44, true), (501, true), (0, true)]),
+    }
 }
 
 fn key_target() -> KeyTarget {
     KeyTarget {
         account: AccountId(0),
-        path: DerivationPath::new(),
+        path: path(&[(0, true)]),
         purpose: KeyPurpose::ExternalAddress,
     }
 }
 
-fn fund_recipient(cli: &str, rpc: &str) {
+fn path(children: &[(u32, bool)]) -> DerivationPath {
+    let mut path = DerivationPath::new();
+    for &(index, hardened) in children {
+        path.push(ChildNumber::new(index, hardened).expect("valid child"))
+            .expect("path fits");
+    }
+    path
+}
+
+fn fund_address(cli: &str, rpc: &str, address: &str, amount: &str) {
     let output = Command::new(cli)
-        .args(["airdrop", "1", RECIPIENT, "--url", rpc])
+        .args(["airdrop", amount, address, "--url", rpc])
         .output()
         .expect("solana CLI must run");
     assert!(
         output.status.success(),
-        "recipient airdrop failed: {}",
+        "airdrop to {address} failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }

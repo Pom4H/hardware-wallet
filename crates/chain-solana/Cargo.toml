@@ -9,8 +9,10 @@ rust-version.workspace = true
 hardware-wallet-chain-api = { path = "../chain-api" }
 
 [dev-dependencies]
+bs58 = "0.5.1"
 hardware-wallet-core = { path = "../wallet-core" }
 hardware-wallet-crypto-runtime = { path = "../crypto-runtime" }
+hardware-wallet-hd-key-backend = { path = "../hd-key-backend" }
 
 [lints]
 workspace = true
