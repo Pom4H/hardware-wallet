@@ -333,7 +333,7 @@ fn exercise_chains(
         score ^= core::mem::size_of_val(&review) as u32;
         black_box(Bitcoin::review_plan(&review));
         if let Ok(mut execution) = Bitcoin::prepare_execution(&review, context) {
-            black_box(execution.next(None));
+            let _ = black_box(execution.next(None));
             score ^= core::mem::size_of_val(&execution) as u32;
         }
     }
@@ -351,7 +351,7 @@ fn exercise_chains(
         score ^= core::mem::size_of_val(&review) as u32;
         black_box(Ethereum::review_plan(&review));
         if let Ok(mut execution) = Ethereum::prepare_execution(&review, context) {
-            black_box(execution.next(None));
+            let _ = black_box(execution.next(None));
             score ^= core::mem::size_of_val(&execution) as u32;
         }
     }
@@ -369,7 +369,7 @@ fn exercise_chains(
         score ^= core::mem::size_of_val(&review) as u32;
         black_box(Solana::review_plan(&review));
         if let Ok(mut execution) = Solana::prepare_execution(&review, context) {
-            black_box(execution.next(None));
+            let _ = black_box(execution.next(None));
             score ^= core::mem::size_of_val(&execution) as u32;
         }
     }
