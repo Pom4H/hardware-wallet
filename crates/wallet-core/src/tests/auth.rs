@@ -100,10 +100,7 @@ fn disconnect_during_unlock_cancels_authentication() {
     )
     .state;
     let state = update(state, Event::PinVerified(auth)).state;
-    assert!(matches!(
-        state.auth(),
-        AuthState::AwaitingPassphrase { .. }
-    ));
+    assert!(matches!(state.auth(), AuthState::AwaitingPassphrase { .. }));
 
     let transition = update(state, Event::HostDisconnected(host));
     assert!(matches!(transition.state.auth(), AuthState::Locked { .. }));

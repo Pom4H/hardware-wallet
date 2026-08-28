@@ -51,9 +51,9 @@ impl ChainModule for Ethereum {
         let kind = match request {
             Request::ShowAddress => OperationKind::ShowAddress,
             Request::ExportPublicKey => OperationKind::ExportPublicKey,
-            Request::SignTransaction
-            | Request::SignPersonalMessage
-            | Request::SignTypedData => return Err(Error::ParserNotImplemented),
+            Request::SignTransaction | Request::SignPersonalMessage | Request::SignTypedData => {
+                return Err(Error::ParserNotImplemented);
+            }
         };
         Ok(Review { kind })
     }

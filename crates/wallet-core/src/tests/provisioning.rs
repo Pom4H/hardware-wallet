@@ -46,10 +46,7 @@ fn recovery_skips_new_backup_and_configures_pin() {
     );
 
     let transition = update(transition.state, Event::RecoveryMaterialCaptured(setup));
-    assert_eq!(
-        transition.effect,
-        Effect::DeriveRecoveredKeyMaterial(setup)
-    );
+    assert_eq!(transition.effect, Effect::DeriveRecoveredKeyMaterial(setup));
 
     let transition = update(transition.state, Event::KeyMaterialReady(setup));
     assert_eq!(transition.effect, Effect::ConfigurePin(setup));

@@ -100,18 +100,17 @@ pub(super) fn key_material_ready(state: State, actual: crate::SetupId) -> Transi
             }),
             Effect::ShowBackup(id),
         ),
-        (
-            ProvisioningMode::Recover(_),
-            ProvisioningStage::DerivingRecoveredKeyMaterial,
-        ) => Transition::new(
-            state.with_lifecycle(Lifecycle::Provisioning {
-                id,
-                mode,
-                passphrase,
-                stage: ProvisioningStage::ConfiguringPin,
-            }),
-            Effect::ConfigurePin(id),
-        ),
+        (ProvisioningMode::Recover(_), ProvisioningStage::DerivingRecoveredKeyMaterial) => {
+            Transition::new(
+                state.with_lifecycle(Lifecycle::Provisioning {
+                    id,
+                    mode,
+                    passphrase,
+                    stage: ProvisioningStage::ConfiguringPin,
+                }),
+                Effect::ConfigurePin(id),
+            )
+        }
         _ => reject(state, RejectReason::InvalidState),
     }
 }

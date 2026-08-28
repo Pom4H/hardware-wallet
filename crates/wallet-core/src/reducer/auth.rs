@@ -1,6 +1,6 @@
 use crate::{
-    AuthState, Effect, FlowState, HostTrust, Lifecycle, PassphraseMode, RejectReason, Session, State,
-    Transition,
+    AuthState, Effect, FlowState, HostTrust, Lifecycle, PassphraseMode, RejectReason, Session,
+    State, Transition,
 };
 
 use super::common::{failed_attempts, reject, unlocked_session};
@@ -177,7 +177,10 @@ pub(super) fn session_opened(
 }
 
 pub(super) fn lock(state: State) -> Transition {
-    if matches!(state.auth(), AuthState::Unavailable | AuthState::Locked { .. }) {
+    if matches!(
+        state.auth(),
+        AuthState::Unavailable | AuthState::Locked { .. }
+    ) {
         return Transition::new(state.with_flow(FlowState::Idle), Effect::None);
     }
 

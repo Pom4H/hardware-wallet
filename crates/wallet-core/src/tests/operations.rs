@@ -28,10 +28,7 @@ fn signing_always_requires_physical_confirmation() {
             },
         },
     );
-    assert_eq!(
-        transition.effect,
-        Effect::RenderOperationReview(operation)
-    );
+    assert_eq!(transition.effect, Effect::RenderOperationReview(operation));
 
     let transition = update(transition.state, Event::ReviewDisplayed(operation));
     assert_eq!(transition.effect, Effect::None);
@@ -64,10 +61,7 @@ fn custom_private_key_operation_is_forced_to_confirm() {
             },
         },
     );
-    assert_eq!(
-        transition.effect,
-        Effect::RenderOperationReview(operation)
-    );
+    assert_eq!(transition.effect, Effect::RenderOperationReview(operation));
 
     let transition = update(transition.state, Event::ReviewDisplayed(operation));
     assert!(matches!(

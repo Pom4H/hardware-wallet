@@ -137,10 +137,7 @@ fn maintenance_requested(
         return reject(state, RejectReason::Busy);
     }
 
-    Transition::new(
-        state.with_flow(FlowState::Maintenance { id, kind }),
-        effect,
-    )
+    Transition::new(state.with_flow(FlowState::Maintenance { id, kind }), effect)
 }
 
 fn maintenance_completed(

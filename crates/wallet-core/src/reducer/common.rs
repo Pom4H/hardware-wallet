@@ -1,6 +1,4 @@
-use crate::{
-    AuthState, Effect, FlowState, Lifecycle, RejectReason, Session, State, Transition,
-};
+use crate::{AuthState, Effect, FlowState, Lifecycle, RejectReason, Session, State, Transition};
 
 pub(super) fn runtime_failure(state: State) -> Transition {
     match state.lifecycle() {

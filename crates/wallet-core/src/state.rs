@@ -1,6 +1,6 @@
 use crate::{
-    AuthId, HostId, MaintenanceId, OperationId, PairingId, PassphraseMode, SecurityPolicy, SessionId,
-    SetupId,
+    AuthId, HostId, MaintenanceId, OperationId, PairingId, PassphraseMode, SecurityPolicy,
+    SessionId, SetupId,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

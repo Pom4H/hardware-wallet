@@ -22,7 +22,9 @@ pub fn update(state: State, event: Event) -> Transition {
         Event::PinConfigured(id) => provisioning::pin_configured(state, id),
         Event::ProvisioningPersisted(id) => provisioning::provisioning_persisted(state, id),
 
-        Event::UnlockRequested { id, host, trust } => auth::unlock_requested(state, id, host, trust),
+        Event::UnlockRequested { id, host, trust } => {
+            auth::unlock_requested(state, id, host, trust)
+        }
         Event::PinVerified(id) => auth::pin_verified(state, id),
         Event::PinRejected(id) => auth::pin_rejected(state, id),
         Event::PassphraseProvided(id) => auth::passphrase_provided(state, id),
@@ -46,11 +48,19 @@ pub fn update(state: State, event: Event) -> Transition {
         Event::OperationFailed(id) => operation::operation_failed(state, id),
         Event::OperationCancelled(id) => operation::operation_cancelled(state, id),
 
-        Event::ChangePinRequested { id, host } => maintenance::change_pin_requested(state, id, host),
+        Event::ChangePinRequested { id, host } => {
+            maintenance::change_pin_requested(state, id, host)
+        }
         Event::PinChanged(id) => maintenance::pin_changed(state, id),
-        Event::BackupCheckRequested { id, host } => maintenance::backup_check_requested(state, id, host),
-        Event::BackupCheckCompleted { id, valid } => maintenance::backup_check_completed(state, id, valid),
-        Event::FactoryResetRequested { id, host } => maintenance::factory_reset_requested(state, id, host),
+        Event::BackupCheckRequested { id, host } => {
+            maintenance::backup_check_requested(state, id, host)
+        }
+        Event::BackupCheckCompleted { id, valid } => {
+            maintenance::backup_check_completed(state, id, valid)
+        }
+        Event::FactoryResetRequested { id, host } => {
+            maintenance::factory_reset_requested(state, id, host)
+        }
         Event::FactoryResetConfirmed(id) => maintenance::factory_reset_confirmed(state, id),
         Event::FactoryResetRejected(id) => maintenance::factory_reset_rejected(state, id),
         Event::WipeCompleted => maintenance::wipe_completed(state),
