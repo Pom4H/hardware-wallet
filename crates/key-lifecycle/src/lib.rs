@@ -31,7 +31,14 @@ pub trait EntropySource {
 pub trait RootSecretStore {
     type Error;
 
+    /// # Errors
+    ///
+    /// Returns a storage error if the root cannot be committed durably.
     fn persist_root(&mut self, root: &[u8]) -> Result<(), Self::Error>;
+
+    /// # Errors
+    ///
+    /// Returns a storage error if the root cannot be read or authenticated.
     fn load_root(
         &mut self,
         output: &mut [u8; MAX_ROOT_ENTROPY_BYTES],
