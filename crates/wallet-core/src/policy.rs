@@ -1,10 +1,34 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PinExhaustion {
+    Lock,
+    Wipe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DisconnectPolicy {
+    KeepSession,
+    Lock,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SigningHostPolicy {
+    AnySessionHost,
+    TrustedOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlindSigningPolicy {
+    Deny,
+    Allow,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SecurityPolicy {
     pub max_pin_attempts: u8,
-    pub wipe_on_max_pin_attempts: bool,
-    pub lock_on_host_disconnect: bool,
-    pub require_trusted_host_for_signing: bool,
-    pub allow_blind_signing: bool,
+    pub pin_exhaustion: PinExhaustion,
+    pub disconnect: DisconnectPolicy,
+    pub signing_hosts: SigningHostPolicy,
+    pub blind_signing: BlindSigningPolicy,
 }
 
 impl SecurityPolicy {
@@ -12,10 +36,10 @@ impl SecurityPolicy {
     pub const fn strict() -> Self {
         Self {
             max_pin_attempts: 10,
-            wipe_on_max_pin_attempts: true,
-            lock_on_host_disconnect: true,
-            require_trusted_host_for_signing: false,
-            allow_blind_signing: false,
+            pin_exhaustion: PinExhaustion::Wipe,
+            disconnect: DisconnectPolicy::Lock,
+            signing_hosts: SigningHostPolicy::AnySessionHost,
+            blind_signing: BlindSigningPolicy::Deny,
         }
     }
 }
