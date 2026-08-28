@@ -477,12 +477,8 @@ mod tests {
         let mnemonic = Mnemonic::from_entropy(&[0_u8; 16]).expect("vector mnemonic");
         let mut lifecycle =
             KeyLifecycle::new(MemorySecretStore::new(), FixedEntropySource::new([7; 32]));
-        lifecycle
-            .begin_recovery(mnemonic)
-            .expect("stage recovery");
-        lifecycle
-            .commit_pending()
-            .expect("persist recovered root");
+        lifecycle.begin_recovery(mnemonic).expect("stage recovery");
+        lifecycle.commit_pending().expect("persist recovered root");
         let empty = NormalizedPassphrase::empty();
         let before = *lifecycle
             .open_context(&empty)
