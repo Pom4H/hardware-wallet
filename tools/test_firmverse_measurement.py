@@ -52,7 +52,7 @@ class FirmverseMeasurementTests(unittest.TestCase):
         )
         measurement = firmverse_measurement.calculate(probe, config(), 0)
         self.assertEqual(measurement.measured_stack_allowance_bytes, 12 * 1024)
-        self.assertEqual(measurement.ram_required_bytes, 47 * 1024)
+        self.assertEqual(measurement.ram_required_bytes, 57 * 1024)
         self.assertEqual(measurement.recommended_ram_kib, 64)
         self.assertEqual(measurement.errors, ())
 
