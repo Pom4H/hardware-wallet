@@ -45,7 +45,13 @@ jobs:
           new_signature = "fn parse_typed_list<const N: usize>(raw: &[u8]) -> Result<[RlpItem<'_>; N], Error> {\n    if raw.first() != Some(&EIP1559_TYPE) {"
           if old_signature not in text:
               raise SystemExit('expected parse_typed_list signature not found')
-          lib.write_text(text.replace(old_signature, new_signature))
+          text = text.replace(old_signature, new_signature)
+          text = text.replace("impl RlpItem<'_> {", "impl<'a> RlpItem<'a> {")
+          text = text.replace(
+              'fn bytes_payload(self) -> Result<&[u8], Error> {',
+              "fn bytes_payload(self) -> Result<&'a [u8], Error> {",
+          )
+          lib.write_text(text)
 
           example = Path('crates/chain-ethereum/examples/e2e.rs')
           text = example.read_text()
