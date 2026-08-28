@@ -23,6 +23,7 @@ pub(super) fn operation_requested(
     let pending = PendingOperation {
         id,
         host,
+        wallet: session.wallet,
         kind: None,
         stage: OperationStage::PreparingReview,
     };
@@ -47,6 +48,21 @@ pub(super) fn review_prepared(
         return reject_operation(state, actual, RejectReason::InvalidState);
     }
 
+    let Some(session) = unlocked_session(state) else {
+        return reject_operation(
+            state.with_flow(FlowState::Idle),
+            actual,
+            RejectReason::Locked,
+        );
+    };
+    if session.host != pending.host || session.wallet != pending.wallet {
+        return reject_operation(
+            state.with_flow(FlowState::Idle),
+            actual,
+            RejectReason::InvalidState,
+        );
+    }
+
     let uses_private_key = plan.uses_private_key || plan.kind.uses_private_key();
     plan.uses_private_key = uses_private_key;
 
@@ -61,13 +77,6 @@ pub(super) fn review_prepared(
     }
 
     if uses_private_key && state.policy().signing_hosts == SigningHostPolicy::TrustedOnly {
-        let Some(session) = unlocked_session(state) else {
-            return reject_operation(
-                state.with_flow(FlowState::Idle),
-                actual,
-                RejectReason::Locked,
-            );
-        };
         if session.trust != HostTrust::Trusted {
             return reject_operation(
                 state.with_flow(FlowState::Idle),
@@ -136,6 +145,21 @@ pub(super) fn operation_confirmed(state: State, actual: crate::OperationId) -> T
     };
     if plan.interaction != Interaction::Confirm {
         return reject_operation(state, actual, RejectReason::InvalidState);
+    }
+
+    let Some(session) = unlocked_session(state) else {
+        return reject_operation(
+            state.with_flow(FlowState::Idle),
+            actual,
+            RejectReason::Locked,
+        );
+    };
+    if session.host != pending.host || session.wallet != pending.wallet {
+        return reject_operation(
+            state.with_flow(FlowState::Idle),
+            actual,
+            RejectReason::InvalidState,
+        );
     }
 
     pending.stage = OperationStage::Executing;
