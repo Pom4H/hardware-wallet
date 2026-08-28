@@ -7,9 +7,11 @@ trusted core owns generic wallet behavior — provisioning, authorization, sessi
 accounts, key locators, user approval, security policy and operation lifecycle — while
 chain-specific parsing, review and cryptographic rules live in isolated modules.
 
-> **Status:** the domain and three narrow reference chain flows are implemented and
-> exercised end-to-end in CI. The project is still experimental and must not be used
-> to protect real funds.
+> **Status:** the domain, a software cryptographic runtime, and three narrow reference
+> chain flows are implemented and exercised end-to-end in CI. Bitcoin Core, Anvil and
+> Agave validate transactions signed by this repository's own runtime; they are no
+> longer used as reference signers. The project is still experimental and must not be
+> used to protect real funds.
 
 ## What the core models
 
@@ -63,7 +65,10 @@ untrusted host request
       │       │        │
       └───────┼────────┘
               ▼
-       isolated runtime
+         Crypto Runtime
+              │
+              ▼
+     key backend / secure element
 ```
 
 `ChainExecution` is intentionally multi-step. A chain can derive and validate the
@@ -73,6 +78,18 @@ signature. Raw transactions and messages stay outside `wallet-core::State`.
 The core must never contain `if chain == bitcoin` / `if chain == ethereum` branches.
 It never stores seed, PIN, passphrase, private key or raw transaction bytes, and it
 never accepts a host-provided signing digest as trusted input.
+
+## Crypto runtime
+
+`crypto-runtime` executes the generic operations requested by an already-approved
+chain execution. The current `SoftwareKeyBackend` is intentionally small: it binds one
+secret to one authorized `WalletContextId + KeyTarget`, zeroizes its stored secret on
+drop, implements secp256k1 ECDSA, Ed25519, SHA-256, double-SHA256, HASH160, Keccak-256
+and SHA-512/256, and fails closed for unsupported algorithms or a mismatched wallet/key.
+
+This software backend is for tests, emulation and architecture validation. It is not a
+production secret store. HD derivation, persistent key storage, secure-element-backed
+keys and hardware entropy are separate backend responsibilities still to be implemented.
 
 ## Validated reference flows
 
@@ -87,10 +104,10 @@ parse and explain. See the per-chain `SUPPORTED.md` files for the exact fail-clo
 boundary.
 
 The GitHub `Chain integration` workflow starts disposable local nodes through
-`Pom4H/chain-sandbox`, runs each adapter in a separate job, compares reference wire
-artifacts where applicable, broadcasts the transaction, and verifies acceptance by the
-local chain. Required CI does not depend on public devnets, faucets or third-party RPC
-credentials.
+`Pom4H/chain-sandbox`, runs each adapter in a separate job, executes every requested
+crypto operation with `crypto-runtime`, broadcasts the resulting transaction, and
+verifies acceptance by the local chain. Required CI does not depend on public devnets,
+faucets, third-party RPC credentials, or node-provided signing.
 
 ## Workspace
 
@@ -98,6 +115,7 @@ credentials.
 crates/
   wallet-core/        no_std lifecycle, auth, keys, policy and operation state machine
   chain-api/          heap-free parse/review/multi-step execution contract
+  crypto-runtime/     no_std generic crypto executor + software key backend
   chain-bitcoin/      strict PSBT/P2WPKH reference adapter
   chain-ethereum/     strict EIP-1559 native-transfer reference adapter
   chain-solana/       strict System Program transfer reference adapter
