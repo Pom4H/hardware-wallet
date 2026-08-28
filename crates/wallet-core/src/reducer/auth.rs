@@ -1,6 +1,6 @@
 use crate::{
-    AuthState, Effect, FlowState, HostTrust, Lifecycle, PassphraseMode, RejectReason, Session,
-    State, Transition,
+    AuthState, DisconnectPolicy, Effect, FlowState, HostTrust, Lifecycle, PassphraseMode,
+    PinExhaustion, RejectReason, Session, State, Transition,
 };
 
 use super::common::{failed_attempts, reject, unlocked_session};
@@ -44,9 +44,8 @@ pub(super) fn pin_verified(state: State, actual: crate::AuthId) -> Transition {
         return reject(state, RejectReason::CorrelationMismatch);
     }
 
-    let passphrase = match state.lifecycle() {
-        Lifecycle::Provisioned { passphrase } => passphrase,
-        _ => return reject(state, RejectReason::NotProvisioned),
+    let Lifecycle::Provisioned { passphrase } = state.lifecycle() else {
+        return reject(state, RejectReason::NotProvisioned);
     };
 
     if passphrase == PassphraseMode::Disabled {
@@ -84,7 +83,7 @@ pub(super) fn pin_rejected(state: State, actual: crate::AuthId) -> Transition {
     let failed_attempts = failed_attempts.saturating_add(1);
     let policy = state.policy();
     let exhausted = failed_attempts >= policy.max_pin_attempts;
-    if exhausted && policy.wipe_on_max_pin_attempts {
+    if exhausted && policy.pin_exhaustion == PinExhaustion::Wipe {
         let next = state
             .with_lifecycle(Lifecycle::Wiping)
             .with_auth(AuthState::Unavailable)
@@ -202,7 +201,7 @@ pub(super) fn session_expired(state: State, session: crate::SessionId) -> Transi
 }
 
 pub(super) fn host_disconnected(state: State, host: crate::HostId) -> Transition {
-    if !state.policy().lock_on_host_disconnect {
+    if state.policy().disconnect == DisconnectPolicy::KeepSession {
         return Transition::new(state, Effect::None);
     }
 
