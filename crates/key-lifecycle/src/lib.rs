@@ -15,6 +15,9 @@ const MAX_PASSPHRASE_BYTES: usize = 128;
 pub trait EntropySource {
     type Error;
 
+    /// # Errors
+    ///
+    /// Returns the hardware entropy source error if fresh random bytes cannot be produced.
     fn fill(&mut self, output: &mut [u8]) -> Result<(), Self::Error>;
 }
 
@@ -33,6 +36,9 @@ pub trait RootSecretStore {
         &mut self,
         output: &mut [u8; MAX_ROOT_ENTROPY_BYTES],
     ) -> Result<Option<usize>, Self::Error>;
+    /// # Errors
+    ///
+    /// Returns a storage error if durable removal cannot be guaranteed.
     fn wipe_root(&mut self) -> Result<(), Self::Error>;
 }
 
@@ -108,7 +114,7 @@ impl NormalizedPassphrase {
     #[must_use]
     pub fn as_str(&self) -> &str {
         // Constructors admit ASCII only, therefore this byte range is valid UTF-8.
-        core::str::from_utf8(&self.bytes[..usize::from(self.len)]).expect("ASCII is UTF-8")
+        core::str::from_utf8(&self.bytes[..usize::from(self.len)]).unwrap_or("")
     }
 }
 
