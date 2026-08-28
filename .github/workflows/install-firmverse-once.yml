@@ -1,0 +1,420 @@
+name: Install verified Firmverse integration
+
+on:
+  push:
+    paths:
+      - .github/workflows/install-firmverse-once.yml
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: install-firmverse-once
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install pinned Cortex-M toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          targets: thumbv8m.main-none-eabi
+          components: rustfmt, llvm-tools-preview
+
+      - name: Install virtual hardware backend
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-arm gdb-multiarch
+
+      - name: Resolve and pin Firmverse
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/Pom4H/firmverse.git /tmp/firmverse
+          echo "FIRMVERSE_SHA=$(git -C /tmp/firmverse rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Compose Firmverse firmware target
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          firmverse_sha = os.environ["FIRMVERSE_SHA"]
+
+          cargo = Path("crates/firmware-budget/Cargo.toml")
+          text = cargo.read_text()
+          if "firmverse-probe" not in text:
+              marker = "[features]\n"
+              if marker not in text:
+                  raise SystemExit("firmware-budget has no [features] table")
+              text = text.replace(
+                  marker,
+                  marker + 'firmverse-probe = ["embedded-probe"]\n',
+                  1,
+              )
+              cargo.write_text(text)
+
+          Path("crates/firmware-budget/build.rs").write_text(
+              '''use std::{env, fs, path::PathBuf};
+
+fn main() {
+    let memory = if env::var_os("CARGO_FEATURE_FIRMVERSE_PROBE").is_some() {
+        "firmverse-memory.x"
+    } else {
+        "memory.x"
+    };
+    let output = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR from Cargo"));
+    fs::copy(memory, output.join("memory.x")).expect("copy selected Cortex-M memory map");
+    println!("cargo:rustc-link-search={}", output.display());
+    println!("cargo:rerun-if-changed=memory.x");
+    println!("cargo:rerun-if-changed=firmverse-memory.x");
+}
+'''
+          )
+
+          Path("crates/firmware-budget/firmverse-memory.x").write_text(
+              '''MEMORY
+{
+  FLASH (rx)  : ORIGIN = 0x00000000, LENGTH = 1M
+  RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 256K
+}
+'''
+          )
+
+          main = Path("crates/firmware-budget/src/main.rs")
+          source = main.read_text()
+          old = '''#[entry]
+fn main() -> ! {
+    let selector = black_box(0x5a_u8);
+    let result = exercise(selector);
+    black_box(result);
+
+    loop {
+        cortex_m::asm::nop();
+    }
+}
+'''
+          new = '''#[entry]
+fn main() -> ! {
+    let selector = black_box(0x5a_u8);
+    let result = exercise(selector);
+    black_box(result);
+
+    #[cfg(feature = "firmverse-probe")]
+    firmverse_done(result);
+
+    #[cfg(not(feature = "firmverse-probe"))]
+    loop {
+        cortex_m::asm::nop();
+    }
+}
+
+#[cfg(feature = "firmverse-probe")]
+#[inline(never)]
+fn firmverse_done(result: u32) -> ! {
+    black_box(result);
+    loop {
+        cortex_m::asm::nop();
+    }
+}
+'''
+          if "fn firmverse_done(" not in source:
+              if old not in source:
+                  raise SystemExit("firmware-budget entry point changed unexpectedly")
+              source = source.replace(old, new, 1)
+              main.write_text(source)
+
+          Path("firmverse.toml").write_text(
+              '''schema = 1
+
+[board]
+target = "thumbv8m.main-none-eabi"
+machine = "mps2-an505"
+cpu = "cortex-m33"
+flash_origin = 0x00000000
+flash_bytes = 1048576
+ram_origin = 0x20000000
+ram_bytes = 262144
+
+[probe]
+completion_symbol = "firmverse_done"
+stack_limit_bytes = 32768
+stack_margin_percent = 50
+exception_reserve_bytes = 512
+timeout_seconds = 120
+
+[coverage]
+scenario = "trusted-core-smoke"
+includes = [
+  "wallet reducer surface",
+  "BIP-39 creation and recovery",
+  "passphrase wallet context",
+  "BIP-32 and SLIP-0010",
+  "secp256k1 and Ed25519 signing",
+  "Bitcoin, Ethereum and Solana adapter linkage",
+]
+limitations = [
+  "not every successful chain parser path is executed yet",
+  "USB, display, buttons, storage and secure element are not modeled yet",
+  "instruction/cycle accounting is not available in the first QEMU backend",
+]
+'''
+          )
+
+          workflow = f'''name: Firmverse hardware execution
+
+on:
+  push:
+    paths:
+      - .github/workflows/firmverse.yml
+      - rust-toolchain.toml
+      - Cargo.toml
+      - Cargo.lock
+      - firmverse.toml
+      - crates/wallet-core/**
+      - crates/chain-api/**
+      - crates/crypto-runtime/**
+      - crates/key-lifecycle/**
+      - crates/hd-key-backend/**
+      - crates/chain-bitcoin/**
+      - crates/chain-ethereum/**
+      - crates/chain-solana/**
+      - crates/firmware-budget/**
+  pull_request:
+    paths:
+      - .github/workflows/firmverse.yml
+      - rust-toolchain.toml
+      - Cargo.toml
+      - Cargo.lock
+      - firmverse.toml
+      - crates/wallet-core/**
+      - crates/chain-api/**
+      - crates/crypto-runtime/**
+      - crates/key-lifecycle/**
+      - crates/hd-key-backend/**
+      - crates/chain-bitcoin/**
+      - crates/chain-ethereum/**
+      - crates/chain-solana/**
+      - crates/firmware-budget/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cortex-m33:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install pinned Cortex-M toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          targets: thumbv8m.main-none-eabi
+          components: llvm-tools-preview
+
+      - name: Link Firmverse execution image
+        run: >-
+          cargo +1.98.0 build
+          --locked
+          --profile firmware
+          --target thumbv8m.main-none-eabi
+          -p hardware-wallet-firmware-budget
+          --features firmverse-probe
+
+      - name: Execute real Cortex-M image
+        id: firmverse
+        uses: Pom4H/firmverse/actions/cortex-m-probe@{firmverse_sha}
+        with:
+          elf: target/thumbv8m.main-none-eabi/firmware/hardware-wallet-firmware-budget
+          target: thumbv8m.main-none-eabi
+          machine: mps2-an505
+          cpu: cortex-m33
+          ram-origin: "0x20000000"
+          ram-length: "262144"
+          flash-origin: "0x00000000"
+          flash-length: "1048576"
+          done-symbol: firmverse_done
+          stack-limit-bytes: "32768"
+          timeout-seconds: "120"
+          output-dir: reports/firmverse
+
+      - name: Upload virtual hardware evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: firmverse-cortex-m33
+          path: reports/firmverse
+          if-no-files-found: error
+'''
+          Path(".github/workflows/firmverse.yml").write_text(workflow)
+
+          ci = Path(".github/workflows/ci.yml")
+          ci_text = ci.read_text()
+          if "workflow_dispatch:" not in ci_text:
+              ci_text = ci_text.replace(
+                  "  pull_request:\n",
+                  "  pull_request:\n  workflow_dispatch:\n",
+                  1,
+              )
+              ci.write_text(ci_text)
+
+          readme = Path("README.md")
+          readme_text = readme.read_text()
+          if "## Virtual hardware execution" not in readme_text:
+              section = '''## Virtual hardware execution
+
+`firmware-budget` is also executable in Firmverse as a real Cortex-M33 ELF.
+Firmverse paints the virtual stack before reset, runs the image to a dedicated
+completion symbol, and reports the deepest stack write. This turns the current
+32 KiB stack allowance into a CI gate while we build scenario-complete firmware.
+
+The first backend is intentionally limited to deterministic execution and stack
+measurement. Exact target cycles, USB, display, buttons, secure storage and the
+secure element remain subsequent virtual-peripheral layers.
+
+'''
+              marker = "## Measured hardware class\n"
+              if marker not in readme_text:
+                  raise SystemExit("README hardware section not found")
+              readme.write_text(readme_text.replace(marker, section + marker, 1))
+
+          requirements = Path("docs/HARDWARE_REQUIREMENTS.md")
+          req_text = requirements.read_text()
+          if "## Firmverse execution gate" not in req_text:
+              req_text += '''
+
+## Firmverse execution gate
+
+The linked ELF is now executed on the `mps2-an505` Cortex-M33 virtual board.
+Firmverse paints free RAM before reset and breaks at `firmverse_done`, producing
+a whole-program stack high-water measurement tied to the ELF hash.
+
+The initial scenario is a lower bound, not the final product stack number: it
+executes lifecycle and cryptographic work but does not yet traverse every valid
+maximum-size chain request or any USB/UI/storage interrupt combination. The
+32 KiB provisional stack budget therefore remains the selection gate until the
+scenario matrix is complete.
+'''
+              requirements.write_text(req_text)
+          PY
+          cargo +1.98.0 fmt --all
+
+      - name: Build and execute the composed image
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 build \
+            --locked \
+            --profile firmware \
+            --target thumbv8m.main-none-eabi \
+            -p hardware-wallet-firmware-budget \
+            --features firmverse-probe
+
+          host="$(rustc +1.98.0 -vV | sed -n 's/^host: //p')"
+          llvm_root="$(rustc +1.98.0 --print sysroot)/lib/rustlib/${host}/bin"
+          python3 /tmp/firmverse/tools/cortex_m_probe.py \
+            --elf target/thumbv8m.main-none-eabi/firmware/hardware-wallet-firmware-budget \
+            --target thumbv8m.main-none-eabi \
+            --machine mps2-an505 \
+            --cpu cortex-m33 \
+            --ram-origin 0x20000000 \
+            --ram-length 262144 \
+            --flash-origin 0x00000000 \
+            --flash-length 1048576 \
+            --done-symbol firmverse_done \
+            --stack-limit-bytes 32768 \
+            --timeout-seconds 120 \
+            --output-dir reports/firmverse \
+            --llvm-nm "$llvm_root/llvm-nm" \
+            --llvm-size "$llvm_root/llvm-size"
+
+      - name: Record measured baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(Path("reports/firmverse/firmverse-report.json").read_text())
+          peak = report["peak_stack_bytes"]
+          recommended = report["recommended_stack_bytes"]
+          headroom = report["stack_headroom_bytes"]
+          markdown = f'''# Firmverse execution baseline
+
+Measured by `Pom4H/firmverse@{os.environ["FIRMVERSE_SHA"]}` from the real
+`thumbv8m.main-none-eabi` ELF produced by this repository.
+
+| Metric | Value |
+| --- | ---: |
+| Virtual board | `mps2-an505` / `cortex-m33` |
+| Measured peak stack | {peak} B / {peak / 1024:.1f} KiB |
+| Current stack gate | 32768 B / 32.0 KiB |
+| Remaining headroom | {headroom} B / {headroom / 1024:.1f} KiB |
+| Firmverse recommendation | {recommended} B / {recommended / 1024:.1f} KiB |
+| Linked Flash observed by backend | {report["flash_bytes"]} B |
+| Emulator wall time | {report["wall_time_ms"]} ms |
+| ELF SHA-256 | `{report["elf_sha256"]}` |
+
+This is a measured lower bound for the current trusted-core smoke scenario.
+The 32 KiB hardware-selection allowance remains in force until valid maximum
+Bitcoin, Ethereum and Solana transactions, USB/UI interrupt overlap, storage
+commit and update scenarios are all executed.
+
+Cycle count is not yet used for MCU frequency selection: {report["cycle_count_status"]}.
+'''
+          Path("docs/FIRMVERSE_BASELINE.md").write_text(markdown)
+          PY
+
+      - name: Verify repository gates
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools -p 'test_*.py'
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 test --locked --workspace
+          cargo +1.98.0 check --locked --workspace --no-default-features
+
+      - name: Commit integration to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          rm .github/workflows/install-firmverse-once.yml
+          git add -A
+          git commit -m "Integrate Firmverse Cortex-M execution"
+          git pull --rebase origin main
+          git push origin main
+
+      - name: Upload bootstrap execution evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: firmverse-bootstrap-cortex-m33
+          path: reports/firmverse
+          if-no-files-found: error
+
+      - name: Dispatch final gates
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for workflow in ci.yml hardware-budget.yml firmverse.yml; do
+            curl --fail --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
+              --data '{"ref":"main"}'
+          done
