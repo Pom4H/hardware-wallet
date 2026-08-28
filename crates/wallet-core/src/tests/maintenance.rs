@@ -35,3 +35,61 @@ fn backup_check_reports_invalid_without_destroying_wallet() {
     assert_eq!(transition.state.flow(), FlowState::Idle);
     assert_eq!(transition.effect, Effect::ReportBackupInvalid(id));
 }
+
+#[test]
+fn backup_check_marks_recovered_wallet_verified() {
+    let setup = SetupId(70);
+    let host = HostId(7);
+    let auth = AuthId(71);
+    let id = MaintenanceId(72);
+    let mut state = State::default();
+
+    state = update(
+        state,
+        Event::StartRecovery {
+            id: setup,
+            format: RecoveryFormat::Shamir,
+            passphrase: PassphraseMode::Disabled,
+        },
+    )
+    .state;
+    state = update(state, Event::RecoveryMaterialCaptured(setup)).state;
+    state = update(state, Event::KeyMaterialReady(setup)).state;
+    state = update(state, Event::PinConfigured(setup)).state;
+    state = update(state, Event::ProvisioningPersisted(setup)).state;
+    assert_eq!(
+        state.wallet_metadata().map(|metadata| metadata.backup),
+        Some(BackupStatus::RecoverySource)
+    );
+
+    state = update(
+        state,
+        Event::UnlockRequested {
+            id: auth,
+            host,
+            trust: HostTrust::Trusted,
+        },
+    )
+    .state;
+    state = update(state, Event::PinVerified(auth)).state;
+    state = update(
+        state,
+        Event::SessionOpened {
+            auth,
+            session: SessionId(73),
+        },
+    )
+    .state;
+
+    state = update(state, Event::BackupCheckRequested { id, host }).state;
+    let transition = update(state, Event::BackupCheckCompleted { id, valid: true });
+
+    assert_eq!(
+        transition
+            .state
+            .wallet_metadata()
+            .map(|metadata| metadata.backup),
+        Some(BackupStatus::Verified)
+    );
+    assert_eq!(transition.effect, Effect::MaintenanceComplete(id));
+}
