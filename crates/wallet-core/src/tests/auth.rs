@@ -161,15 +161,15 @@ fn stale_host_trust_result_after_disconnect_is_rejected() {
     let state = update(state, Event::HostDisconnected(host)).state;
     assert!(matches!(state.auth(), AuthState::Locked { .. }));
 
-    let stale = update(
+    let callback = update(
         state,
         Event::HostTrustResolved {
             id: auth,
             trust: HostTrust::Trusted,
         },
     );
-    assert_eq!(stale.effect, Effect::Reject(RejectReason::InvalidState));
-    assert!(matches!(stale.state.auth(), AuthState::Locked { .. }));
+    assert_eq!(callback.effect, Effect::Reject(RejectReason::InvalidState));
+    assert!(matches!(callback.state.auth(), AuthState::Locked { .. }));
 }
 
 #[test]
