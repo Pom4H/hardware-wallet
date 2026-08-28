@@ -22,12 +22,12 @@ jobs:
           from pathlib import Path
 
           examples = [
-              ('bitcoin', 'Secp256k1Bip32', 'BIP84'),
-              ('ethereum', 'Secp256k1Bip32', 'Ethereum BIP44'),
-              ('solana', 'Ed25519Slip10', 'Solana SLIP-0010'),
+              ('bitcoin', 'Secp256k1Bip32'),
+              ('ethereum', 'Secp256k1Bip32'),
+              ('solana', 'Ed25519Slip10'),
           ]
 
-          for chain, family, label in examples:
+          for chain, family in examples:
               p = Path(f'crates/chain-{chain}/examples/{chain}_e2e.rs')
               s = p.read_text()
               s = s.replace(
@@ -38,32 +38,33 @@ jobs:
                   1,
               )
               s = s.replace('const TEST_SEED: [u8; 32] = [', 'const TEST_ENTROPY: [u8; 32] = [', 1)
-              old = '''    let context = unlocked_context();
-    let target = key_target();
-    let locator = context.bind_key(target);
-    let hd = HdKeyBackend::new(account_descriptor(), KeyFamily::%s, &TEST_SEED)
-        .expect("HD backend");
-''' % family
-              new = '''    let mut lifecycle = KeyLifecycle::new(
-        MemorySecretStore::new(),
-        FixedEntropySource::new(TEST_ENTROPY),
-    );
-    lifecycle
-        .begin_create(MnemonicSize::Words24)
-        .expect("device entropy creates BIP39 wallet");
-    lifecycle
-        .commit_pending()
-        .expect("provisioning persists root entropy");
-    let wallet = lifecycle
-        .open_context(&NormalizedPassphrase::empty())
-        .expect("open base wallet context");
-
-    let context = unlocked_context(wallet.id());
-    let target = key_target();
-    let locator = context.bind_key(target);
-    let hd = HdKeyBackend::new(account_descriptor(wallet.id()), KeyFamily::%s, wallet.seed())
-        .expect("HD backend");
-''' % family
+              old = (
+                  '    let context = unlocked_context();\n'
+                  '    let target = key_target();\n'
+                  '    let locator = context.bind_key(target);\n'
+                  f'    let hd = HdKeyBackend::new(account_descriptor(), KeyFamily::{family}, &TEST_SEED)\n'
+                  '        .expect("HD backend");\n'
+              )
+              new = (
+                  '    let mut lifecycle = KeyLifecycle::new(\n'
+                  '        MemorySecretStore::new(),\n'
+                  '        FixedEntropySource::new(TEST_ENTROPY),\n'
+                  '    );\n'
+                  '    lifecycle\n'
+                  '        .begin_create(MnemonicSize::Words24)\n'
+                  '        .expect("device entropy creates BIP39 wallet");\n'
+                  '    lifecycle\n'
+                  '        .commit_pending()\n'
+                  '        .expect("provisioning persists root entropy");\n'
+                  '    let wallet = lifecycle\n'
+                  '        .open_context(&NormalizedPassphrase::empty())\n'
+                  '        .expect("open base wallet context");\n\n'
+                  '    let context = unlocked_context(wallet.id());\n'
+                  '    let target = key_target();\n'
+                  '    let locator = context.bind_key(target);\n'
+                  f'    let hd = HdKeyBackend::new(account_descriptor(wallet.id()), KeyFamily::{family}, wallet.seed())\n'
+                  '        .expect("HD backend");\n'
+              )
               if old not in s:
                   raise SystemExit(f'missing main block in {chain}')
               s = s.replace(old, new, 1)
@@ -88,11 +89,10 @@ jobs:
               c = cargo.read_text()
               dep = 'hardware-wallet-key-lifecycle = { path = "../key-lifecycle", features = ["test-utils"] }\n'
               if dep not in c:
-                  c = c.replace(
-                      'hardware-wallet-hd-key-backend = { path = "../hd-key-backend" }\n',
-                      'hardware-wallet-hd-key-backend = { path = "../hd-key-backend" }\n' + dep,
-                      1,
-                  )
+                  needle = 'hardware-wallet-hd-key-backend = { path = "../hd-key-backend" }\n'
+                  if needle not in c:
+                      raise SystemExit(f'missing HD dev dependency in {chain}')
+                  c = c.replace(needle, needle + dep, 1)
               cargo.write_text(c)
           PY
           cargo fmt --all
