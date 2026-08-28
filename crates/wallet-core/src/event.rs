@@ -26,8 +26,15 @@ pub enum Event {
         host: HostId,
         trust: HostTrust,
     },
+    /// The secure authentication backend has verified the PIN and durably reset
+    /// its retry counter before emitting this event.
     PinVerified(AuthId),
-    PinRejected(AuthId),
+    /// The secure authentication backend has rejected the PIN and already
+    /// durably recorded the total failed-attempt count.
+    PinRejected {
+        id: AuthId,
+        failed_attempts: u8,
+    },
     PassphraseProvided(AuthId),
     PassphraseSkipped(AuthId),
     SessionOpened {
