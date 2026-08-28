@@ -6,8 +6,8 @@ use bip32::{
 };
 use hardware_wallet_core::{AccountDescriptor, AccountKind, ChildNumber, KeyLocator, KeyTarget};
 use hardware_wallet_crypto_runtime::{Error as RuntimeError, SoftwareKeyBackend};
-use hmac::{Hmac, Mac};
-use k256::elliptic_curve::PrimeField;
+use hmac::{Hmac, KeyInit, Mac};
+use k256::elliptic_curve::sec1::ToSec1Point;
 use sha2::Sha512;
 use zeroize::{Zeroize, Zeroizing};
 
