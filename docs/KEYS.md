@@ -11,7 +11,7 @@ A host or chain request never supplies `WalletContextId` for a cryptographic ope
 It may request only a `KeyTarget`:
 
 ```text
-account + derivation path + purpose
+account + relative derivation path + purpose
 ```
 
 After PIN/passphrase authorization, the reducer exposes an `ExecutionContext`. This type
@@ -31,20 +31,47 @@ ExecutionContext from unlocked State
 capability derived from authorization rather than another host-controlled parameter.
 A locked state cannot produce an `ExecutionContext`.
 
-## Derivation
+## Accounts and derivation
 
 `DerivationPath` is fixed-capacity and allocation-free. Each `ChildNumber` stores the
 index and hardened bit separately so chain modules do not need to smuggle BIP-32 bit
 encoding into the generic model.
 
-The core intentionally does not decide whether a path is valid for Bitcoin, Ethereum,
-Solana or another chain. The chain adapter validates its own path policy before it
-creates a key target for execution.
+`AccountDescriptor::root` is trusted, device-owned account metadata. A request supplies
+only a path relative to that root. The current `hd-key-backend` is bound to exactly one
+`AccountDescriptor` and rejects a `KeyLocator` whose wallet context or account id does
+not match it.
 
-The current software backend binds one concrete secret to one `KeyTarget`; it does not
-yet implement BIP-32 or SLIP-0010 derivation. HD derivation belongs behind the crypto
-runtime boundary so chain parsers and wallet state do not change when a software key
-backend is replaced by a secure element or another key store.
+The backend currently implements two key families:
+
+```text
+Secp256k1Bip32
+Ed25519Slip10
+```
+
+For secp256k1 it uses the heap-free generic engine from `bip32` with the project's
+current `k256` implementation as its private/public-key provider. For Ed25519 it uses
+the hardened-only SLIP-0010 recurrence over HMAC-SHA512. Non-hardened Ed25519 children
+fail closed.
+
+The master seed is kept in fixed-capacity storage and zeroized on drop. Intermediate
+SLIP-0010 keys and chain codes use zeroizing buffers. A derived child secret is turned
+into the existing one-key `SoftwareKeyBackend` for the approved operation. That is the
+host/emulator composition path; a future secure-element backend can replace it without
+changing chain adapters.
+
+CI includes the official BIP-32 and SLIP-0010 derivation vectors and verifies complete
+HD-derived network flows for:
+
+```text
+Bitcoin   m/84'/1'/0'/0/0
+Ethereum  m/44'/60'/0'/0/0
+Solana    m/44'/501'/0'/0'
+```
+
+The local node funds the public address produced from the derived key, then the same
+child key signs the reviewed transaction. The node never provides the wallet-under-test
+private key or signature.
 
 ## Generic crypto operations
 
@@ -68,8 +95,7 @@ Supported vocabulary is intentionally broader than the initial adapters:
 - public-key formats: raw, compressed, uncompressed, x-only, extended, custom.
 
 This is a vocabulary, not a promise that every reference hardware target implements
-every algorithm. A runtime advertises concrete capabilities and must fail closed when a
-requested operation is unsupported.
+every algorithm. A runtime must fail closed when a requested operation is unsupported.
 
 ## Crypto runtime
 
@@ -86,20 +112,14 @@ The current backend implements:
 - Ed25519 signing;
 - SHA-256, double-SHA256, HASH160, Keccak-256 and SHA-512/256.
 
-The three chain E2Es now use this runtime to produce their signatures. Bitcoin Core,
-Anvil and Agave only provide deterministic local chain state and verify/broadcast the
-resulting transactions; they do not sign on behalf of the hardware-wallet code.
+The chain E2Es execute these operations against child secrets produced by
+`hd-key-backend`. Bitcoin Core, Anvil and Agave only provide local chain state,
+funding/faucet services, validation and broadcast.
 
-A production backend must additionally own hardware entropy, master-secret lifecycle,
-HD derivation, persistent or secure-element key storage, stronger zeroization guarantees,
-and capability discovery for algorithms supported by the selected hardware.
-
-## Accounts
-
-`AccountDescriptor` is metadata, not an unbounded account database. Hardware wallets
-may choose to persist accounts, derive them on demand, or let the host maintain account
-catalogues. The trusted device still validates every key target used for address display
-or signing.
+Production key lifecycle work still includes hardware entropy, mnemonic/recovery
+material to seed conversion, passphrase-derived wallet seeds, persistent or
+secure-element-backed secret storage, stronger memory-erasure guarantees and hardware
+capability discovery.
 
 ## Chain boundary
 
