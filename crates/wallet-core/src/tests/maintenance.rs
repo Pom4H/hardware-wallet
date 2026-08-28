@@ -62,11 +62,11 @@ fn backup_check_marks_recovered_wallet_verified() {
         Some(BackupStatus::RecoverySource)
     );
 
+    state = update(state, Event::UnlockRequested { id: auth, host }).state;
     state = update(
         state,
-        Event::UnlockRequested {
+        Event::HostTrustResolved {
             id: auth,
-            host,
             trust: HostTrust::Trusted,
         },
     )

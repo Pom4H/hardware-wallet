@@ -9,7 +9,6 @@ pub(super) fn unlock_requested(
     state: State,
     id: crate::AuthId,
     host: crate::HostId,
-    trust: HostTrust,
 ) -> Transition {
     if !matches!(state.lifecycle(), Lifecycle::Provisioned { .. }) {
         return reject(state, RejectReason::NotProvisioned);
@@ -20,6 +19,31 @@ pub(super) fn unlock_requested(
     let AuthState::Locked { failed_attempts } = state.auth() else {
         return reject(state, RejectReason::InvalidState);
     };
+
+    let auth = AuthState::ResolvingHost {
+        id,
+        host,
+        failed_attempts,
+    };
+    Transition::new(state.with_auth(auth), Effect::ResolveHostTrust { id, host })
+}
+
+pub(super) fn host_trust_resolved(
+    state: State,
+    actual: crate::AuthId,
+    trust: HostTrust,
+) -> Transition {
+    let AuthState::ResolvingHost {
+        id,
+        host,
+        failed_attempts,
+    } = state.auth()
+    else {
+        return reject(state, RejectReason::InvalidState);
+    };
+    if id != actual {
+        return reject(state, RejectReason::CorrelationMismatch);
+    }
 
     let auth = AuthState::VerifyingPin {
         id,
@@ -32,10 +56,7 @@ pub(super) fn unlock_requested(
 
 pub(super) fn pin_verified(state: State, actual: crate::AuthId) -> Transition {
     let AuthState::VerifyingPin {
-        id,
-        host,
-        trust,
-        failed_attempts,
+        id, host, trust, ..
     } = state.auth()
     else {
         return reject(state, RejectReason::InvalidState);
@@ -54,7 +75,7 @@ pub(super) fn pin_verified(state: State, actual: crate::AuthId) -> Transition {
             id,
             host,
             trust,
-            failed_attempts,
+            failed_attempts: 0,
         };
         Transition::new(state.with_auth(auth), Effect::OpenSession { id, host })
     } else {
@@ -62,16 +83,20 @@ pub(super) fn pin_verified(state: State, actual: crate::AuthId) -> Transition {
             id,
             host,
             trust,
-            failed_attempts,
+            failed_attempts: 0,
         };
         Transition::new(state.with_auth(auth), Effect::RequestPassphrase(id))
     }
 }
 
-pub(super) fn pin_rejected(state: State, actual: crate::AuthId) -> Transition {
+pub(super) fn pin_rejected(
+    state: State,
+    actual: crate::AuthId,
+    durable_failed_attempts: u8,
+) -> Transition {
     let AuthState::VerifyingPin {
         id,
-        failed_attempts,
+        failed_attempts: observed_failed_attempts,
         ..
     } = state.auth()
     else {
@@ -80,10 +105,12 @@ pub(super) fn pin_rejected(state: State, actual: crate::AuthId) -> Transition {
     if id != actual {
         return reject(state, RejectReason::CorrelationMismatch);
     }
+    if durable_failed_attempts == 0 || durable_failed_attempts <= observed_failed_attempts {
+        return reject(state, RejectReason::InvalidState);
+    }
 
-    let failed_attempts = failed_attempts.saturating_add(1);
     let policy = state.policy();
-    let exhausted = failed_attempts >= policy.max_pin_attempts;
+    let exhausted = durable_failed_attempts >= policy.max_pin_attempts;
     if exhausted && policy.pin_exhaustion == PinExhaustion::Wipe {
         let next = state
             .with_lifecycle(Lifecycle::Wiping)
@@ -92,9 +119,13 @@ pub(super) fn pin_rejected(state: State, actual: crate::AuthId) -> Transition {
         return Transition::new(next, Effect::WipeWallet);
     }
 
-    let remaining_attempts = policy.max_pin_attempts.saturating_sub(failed_attempts);
+    let remaining_attempts = policy
+        .max_pin_attempts
+        .saturating_sub(durable_failed_attempts);
     Transition::new(
-        state.with_auth(AuthState::Locked { failed_attempts }),
+        state.with_auth(AuthState::Locked {
+            failed_attempts: durable_failed_attempts,
+        }),
         Effect::AuthenticationFailed { remaining_attempts },
     )
 }
@@ -208,7 +239,8 @@ pub(super) fn host_disconnected(state: State, host: crate::HostId) -> Transition
 
     let bound_host = match state.auth() {
         AuthState::Unlocked(session) => Some(session.host),
-        AuthState::VerifyingPin { host, .. }
+        AuthState::ResolvingHost { host, .. }
+        | AuthState::VerifyingPin { host, .. }
         | AuthState::AwaitingPassphrase { host, .. }
         | AuthState::OpeningSession { host, .. } => Some(host),
         AuthState::Unavailable | AuthState::Locked { .. } => None,

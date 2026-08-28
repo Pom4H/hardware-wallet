@@ -29,9 +29,9 @@ pub use policy::{
 pub use reducer::update;
 pub use state::{
     AuthState, BackupStatus, FlowState, HostTrust, Interaction, Lifecycle, MaintenanceKind,
-    OperationKind, OperationStage, PendingOperation, ProvisioningMode, ProvisioningStage,
-    RecoveryFormat, ReviewAssurance, ReviewPlan, Session, SettingsStage, State, WalletMetadata,
-    WalletOrigin,
+    OperationKind, OperationStage, PendingOperation, PersistentState, ProvisioningMode,
+    ProvisioningStage, RecoveryFormat, ReviewAssurance, ReviewPlan, Session, SettingsStage, State,
+    WalletMetadata, WalletOrigin,
 };
 
 #[cfg(test)]

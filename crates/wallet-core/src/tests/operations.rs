@@ -143,11 +143,11 @@ fn untrusted_host_can_be_forbidden_from_signing() {
 
     let auth = AuthId(2);
     let host = HostId(7);
+    state = update(state, Event::UnlockRequested { id: auth, host }).state;
     state = update(
         state,
-        Event::UnlockRequested {
+        Event::HostTrustResolved {
             id: auth,
-            host,
             trust: HostTrust::Untrusted,
         },
     )

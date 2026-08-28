@@ -36,6 +36,10 @@ pub enum Effect {
     PersistProvisioning(SetupId),
     ProvisioningComplete(SetupId),
 
+    ResolveHostTrust {
+        id: AuthId,
+        host: HostId,
+    },
     VerifyPin {
         id: AuthId,
         host: HostId,

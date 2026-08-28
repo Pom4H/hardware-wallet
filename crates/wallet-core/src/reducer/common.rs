@@ -35,6 +35,9 @@ pub(super) const fn unlocked_session(state: State) -> Option<Session> {
 pub(super) const fn failed_attempts(auth: AuthState) -> u8 {
     match auth {
         AuthState::Locked { failed_attempts }
+        | AuthState::ResolvingHost {
+            failed_attempts, ..
+        }
         | AuthState::VerifyingPin {
             failed_attempts, ..
         }

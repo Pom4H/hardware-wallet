@@ -4,6 +4,7 @@ mod auth;
 mod keys;
 mod maintenance;
 mod operations;
+mod persistence;
 mod provisioning;
 mod settings;
 
@@ -36,15 +37,8 @@ fn unlocked_state_with_wallet(trust: HostTrust, wallet: WalletContextId) -> Stat
     let session = SessionId(3);
     let mut state = provisioned_state(PassphraseMode::Disabled);
 
-    state = update(
-        state,
-        Event::UnlockRequested {
-            id: auth,
-            host,
-            trust,
-        },
-    )
-    .state;
+    state = update(state, Event::UnlockRequested { id: auth, host }).state;
+    state = update(state, Event::HostTrustResolved { id: auth, trust }).state;
     state = update(state, Event::PinVerified(auth)).state;
     update(
         state,

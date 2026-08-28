@@ -21,13 +21,26 @@ pub enum Event {
     PinConfigured(SetupId),
     ProvisioningPersisted(SetupId),
 
+    /// Untrusted host asks to begin authentication. Host trust is intentionally
+    /// not part of this request and must be resolved by device-owned storage.
     UnlockRequested {
         id: AuthId,
         host: HostId,
+    },
+    /// Result from the trusted-host backend for the active unlock attempt.
+    HostTrustResolved {
+        id: AuthId,
         trust: HostTrust,
     },
+    /// The secure authentication backend has verified the PIN and durably reset
+    /// its retry counter before emitting this event.
     PinVerified(AuthId),
-    PinRejected(AuthId),
+    /// The secure authentication backend has rejected the PIN and already
+    /// durably recorded the total failed-attempt count.
+    PinRejected {
+        id: AuthId,
+        failed_attempts: u8,
+    },
     PassphraseProvided(AuthId),
     PassphraseSkipped(AuthId),
     SessionOpened {
