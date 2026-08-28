@@ -1,4 +1,7 @@
-use crate::{AuthId, HostId, MaintenanceId, OperationId, PairingId, RecoveryFormat, SetupId};
+use crate::{
+    AuthId, HostId, MaintenanceId, OperationId, PairingId, RecoveryFormat, SettingChange,
+    SettingsId, SetupId,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RejectReason {
@@ -68,6 +71,17 @@ pub enum Effect {
         reason: RejectReason,
     },
     AbortOperation(OperationId),
+
+    RenderSettingChange {
+        id: SettingsId,
+        change: SettingChange,
+    },
+    PersistSettingChange {
+        id: SettingsId,
+        change: SettingChange,
+    },
+    SettingChangeComplete(SettingsId),
+    SettingChangeRejected(SettingsId),
 
     ChangePin(MaintenanceId),
     MaintenanceComplete(MaintenanceId),
