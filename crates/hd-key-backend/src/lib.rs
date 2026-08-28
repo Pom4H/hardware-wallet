@@ -128,12 +128,10 @@ impl HdKeyBackend {
         let secret = self.derive_secret(key)?;
         let target = key.target();
         match self.family {
-            KeyFamily::Secp256k1Bip32 => SoftwareKeyBackend::secp256k1(
-                self.account.wallet,
-                target,
-                *secret,
-            )
-            .map_err(Into::into),
+            KeyFamily::Secp256k1Bip32 => {
+                SoftwareKeyBackend::secp256k1(self.account.wallet, target, *secret)
+                    .map_err(Into::into)
+            }
             KeyFamily::Ed25519Slip10 => Ok(SoftwareKeyBackend::ed25519(
                 self.account.wallet,
                 target,
@@ -194,8 +192,7 @@ impl HdKeyBackend {
 }
 
 fn to_bip32_child(child: ChildNumber) -> Result<Bip32ChildNumber, Error> {
-    Bip32ChildNumber::new(child.index(), child.is_hardened())
-        .map_err(|_| Error::InvalidDerivation)
+    Bip32ChildNumber::new(child.index(), child.is_hardened()).map_err(|_| Error::InvalidDerivation)
 }
 
 struct Slip10Node {
@@ -205,8 +202,8 @@ struct Slip10Node {
 
 impl Slip10Node {
     fn master(seed: &[u8]) -> Result<Self, Error> {
-        let mut hmac = HmacSha512::new_from_slice(b"ed25519 seed")
-            .map_err(|_| Error::InvalidDerivation)?;
+        let mut hmac =
+            HmacSha512::new_from_slice(b"ed25519 seed").map_err(|_| Error::InvalidDerivation)?;
         hmac.update(seed);
         Self::from_hmac(hmac)
     }
@@ -258,10 +255,9 @@ impl Bip32PrivateKey for K256Private {
     }
 
     fn derive_child(&self, other: PrivateKeyBytes) -> bip32::Result<Self> {
-        let child_scalar = Option::<k256::NonZeroScalar>::from(
-            k256::NonZeroScalar::from_repr(other.into()),
-        )
-        .ok_or(Bip32Error::Crypto)?;
+        let child_scalar =
+            Option::<k256::NonZeroScalar>::from(k256::NonZeroScalar::from_repr(other.into()))
+                .ok_or(Bip32Error::Crypto)?;
         let derived = self.0.to_nonzero_scalar().as_ref() + child_scalar.as_ref();
         Option::<k256::NonZeroScalar>::from(k256::NonZeroScalar::new(derived))
             .map(|scalar| Self(scalar.into()))
