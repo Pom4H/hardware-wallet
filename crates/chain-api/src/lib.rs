@@ -107,17 +107,22 @@ impl<const N: usize> Default for BoundedBytes<N> {
 
 pub const MAX_PUBLIC_KEY_BYTES: usize = 65;
 pub const MAX_SIGNATURE_BYTES: usize = 96;
+pub const MAX_DIGEST_BYTES: usize = 64;
 
 /// Result returned by the isolated crypto/key runtime to a chain execution.
 ///
-/// Public keys and signatures are transient non-secret outputs. They are kept
-/// outside `wallet-core::State` and are consumed immediately by the active
-/// chain execution state machine.
+/// Public keys, digests and signatures are transient non-secret outputs. They
+/// are kept outside `wallet-core::State` and are consumed immediately by the
+/// active chain execution state machine.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CryptoOutput {
     PublicKey {
         format: PublicKeyFormat,
         bytes: BoundedBytes<MAX_PUBLIC_KEY_BYTES>,
+    },
+    Digest {
+        algorithm: HashAlgorithm,
+        bytes: BoundedBytes<MAX_DIGEST_BYTES>,
     },
     Signature {
         scheme: SignatureScheme,
@@ -136,9 +141,9 @@ pub enum ExecutionStep<R> {
 /// Stateful execution that runs only after wallet-core approved an operation.
 ///
 /// A chain may require several crypto steps. For example Bitcoin can derive a
-/// public key, validate it against the input script, and only then request a
-/// signature. Solana can similarly prove that the selected wallet key is the
-/// transaction's required signer before signing the message.
+/// public key, hash it, validate it against the input script, calculate BIP143
+/// component hashes, and only then request a signature. Solana can similarly
+/// prove that the selected wallet key is the transaction's required signer.
 pub trait ChainExecution {
     type Response;
     type Error;
@@ -157,7 +162,7 @@ pub trait ChainExecution {
         result: Option<&CryptoOutput>,
     ) -> Result<ExecutionStep<Self::Response>, Self::Error>;
 
-    /// Resolves an opaque payload handle requested by [`CryptoOperation::Sign`].
+    /// Resolves an opaque payload handle requested by a crypto operation.
     ///
     /// Payload bytes remain owned by the chain execution and never enter the
     /// generic wallet state machine.
