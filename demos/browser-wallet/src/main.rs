@@ -14,6 +14,10 @@ const GPIO_EXT: usize = GPIO_BASE + 0x50;
 const PIN_LED: u32 = 7; // PB-03F P11
 const PIN_LEFT: u32 = 8; // PB-03F P14
 const PIN_RIGHT: u32 = 10; // PB-03F P16
+const MASK_LEFT: u32 = 1 << PIN_LEFT;
+const MASK_RIGHT: u32 = 1 << PIN_RIGHT;
+const MASK_BUTTONS: u32 = MASK_LEFT | MASK_RIGHT;
+const CONTROL_CENTER_HOLD_MS: u32 = 1_500;
 
 const MAILBOX_BASE: usize = 0x2000_0000;
 const MAILBOX_MAGIC: usize = MAILBOX_BASE;
@@ -31,8 +35,10 @@ fn main() -> ! {
 
     let mut demo = WalletDemo::new();
     let mut last_frame_sequence = u8::MAX;
-    let mut previous_inputs = 0_u32;
     let mut previous_tick = mmio_read(MAILBOX_TICK_MS);
+    let mut gesture_mask = 0_u32;
+    let mut gesture_started = 0_u32;
+    let mut long_gesture_sent = false;
 
     loop {
         let now = mmio_read(MAILBOX_TICK_MS);
@@ -42,15 +48,30 @@ fn main() -> ! {
             demo.tick(elapsed as u16);
         }
 
-        let inputs = mmio_read(GPIO_EXT);
-        let rising = inputs & !previous_inputs;
-        previous_inputs = inputs;
-
-        if rising & (1 << PIN_LEFT) != 0 {
-            demo.press(Button::Left);
-        }
-        if rising & (1 << PIN_RIGHT) != 0 {
-            demo.press(Button::Right);
+        let active = mmio_read(GPIO_EXT) & MASK_BUTTONS;
+        if active != 0 {
+            if gesture_mask == 0 {
+                gesture_started = now;
+                long_gesture_sent = false;
+            }
+            gesture_mask |= active;
+            if gesture_mask == MASK_BUTTONS
+                && !long_gesture_sent
+                && now.wrapping_sub(gesture_started) >= CONTROL_CENTER_HOLD_MS
+            {
+                demo.press(Button::BothHeld);
+                long_gesture_sent = true;
+            }
+        } else if gesture_mask != 0 {
+            if !long_gesture_sent {
+                demo.press(match gesture_mask {
+                    MASK_LEFT => Button::Left,
+                    MASK_RIGHT => Button::Right,
+                    _ => Button::Both,
+                });
+            }
+            gesture_mask = 0;
+            long_gesture_sent = false;
         }
 
         let frame = demo.frame();
@@ -61,15 +82,25 @@ fn main() -> ! {
             mailbox_send(&encoded[..length]);
         }
 
-        // The LED reports that firmware is alive. Signing uses a slow blink so
-        // the physical twin and electrical model can expose the extra load.
-        let led_on = if demo.screen().signing_active() {
+        // The LED reports that firmware is alive. Signing uses a slow blink;
+        // sleep turns it off before the Cortex-M executes WFI.
+        let led_on = if demo.sleeping() {
+            false
+        } else if demo.screen().signing_active() {
             (now / 80) & 1 == 0
         } else {
             true
         };
         mmio_write(GPIO_DR, if led_on { 1 << PIN_LED } else { 0 });
-        cortex_m::asm::nop();
+
+        if demo.sleeping() {
+            // Firmverse now preserves the architectural WFI state until a
+            // rising GPIO edge arrives. The same P14/P16 input that wakes the
+            // core is then consumed by the firmware gesture recognizer above.
+            cortex_m::asm::wfi();
+        } else {
+            cortex_m::asm::nop();
+        }
     }
 }
 
