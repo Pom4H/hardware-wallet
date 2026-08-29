@@ -1,0 +1,81 @@
+name: Add memory checkpoint once
+
+on:
+  push:
+    paths:
+      - .github/workflows/add-memory-checkpoint-once.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Add deterministic live-data checkpoint
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/firmware-budget/src/main.rs')
+          text = path.read_text()
+
+          done = '''#[cfg(feature = "firmverse-probe")]
+          #[inline(never)]
+          pub extern "C" fn firmverse_done() {
+              cortex_m::asm::nop();
+          }
+          '''.replace('          ', '')
+          checkpoint = '''
+
+          #[cfg(feature = "firmverse-probe")]
+          #[inline(never)]
+          pub extern "C" fn firmverse_memory_live() {
+              cortex_m::asm::nop();
+          }
+          '''.replace('          ', '')
+          if 'firmverse_memory_live' not in text:
+              if done not in text:
+                  raise SystemExit('firmverse_done anchor missing')
+              text = text.replace(done, done + checkpoint, 1)
+
+          anchor = '''    let secp_backend = match secp_hd.software_backend(secp_locator) {
+              Ok(value) => value,
+              Err(_) => return false,
+          };
+          '''.replace('          ', '')
+          insertion = anchor + '''    // This checkpoint is reached while the public deterministic test root and
+    // the derived software signing key are intentionally live. Firmverse dumps
+    // MCU-visible memory here to validate the memory-hygiene scanner itself.
+    firmverse_memory_live();
+'''
+          if 'Firmverse dumps\n    // MCU-visible memory here' not in text:
+              if anchor not in text:
+                  raise SystemExit('secp backend anchor missing')
+              text = text.replace(anchor, insertion, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Format and verify firmware
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --target thumbv8m.main-none-eabi
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 check --locked --target thumbv8m.main-none-eabi -p hardware-wallet-firmware-budget --features firmverse-probe
+
+      - name: Commit source change
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add crates/firmware-budget/src/main.rs
+          git diff --cached --quiet && exit 0
+          git commit -m "Expose deterministic MCU memory checkpoint"
+          git pull --rebase origin main
+          git push origin main
