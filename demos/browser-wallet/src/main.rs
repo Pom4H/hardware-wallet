@@ -93,10 +93,10 @@ fn main() -> ! {
         };
         mmio_write(GPIO_DR, if led_on { 1 << PIN_LED } else { 0 });
 
-        if demo.sleeping() {
-            // Firmverse now preserves the architectural WFI state until a
-            // rising GPIO edge arrives. The same P14/P16 input that wakes the
-            // core is then consumed by the firmware gesture recognizer above.
+        if demo.sleeping() && active == 0 {
+            // Enter WFI only when both inputs are released. A rising P14/P16
+            // edge wakes the core, and the core then remains active until the
+            // button is released so the complete gesture can be consumed.
             cortex_m::asm::wfi();
         } else {
             cortex_m::asm::nop();
