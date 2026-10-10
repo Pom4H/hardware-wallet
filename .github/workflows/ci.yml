@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   tools:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -17,7 +17,7 @@ jobs:
         run: python3 -m unittest discover -s tools -p 'test_*.py'
 
   rust:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -40,7 +40,7 @@ jobs:
         run: cargo +1.98.0 check --locked --workspace --no-default-features
 
   msrv:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
