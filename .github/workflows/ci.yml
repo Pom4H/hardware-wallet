@@ -2,13 +2,20 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
+# Keep only the newest automatic verification for each ref.
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   tools:
+    timeout-minutes: 20
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -17,6 +24,7 @@ jobs:
         run: python3 -m unittest discover -s tools -p 'test_*.py'
 
   rust:
+    timeout-minutes: 20
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -40,6 +48,7 @@ jobs:
         run: cargo +1.98.0 check --locked --workspace --no-default-features
 
   msrv:
+    timeout-minutes: 20
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

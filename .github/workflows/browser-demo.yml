@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest automatic verification for each ref.
+concurrency:
+  group: browser-demo-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   build:
     runs-on: [self-hosted, Linux, X64]
@@ -31,4 +36,4 @@ jobs:
           name: hardware-wallet-browser-demo
           path: demos/browser-wallet/dist
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3

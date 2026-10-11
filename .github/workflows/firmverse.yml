@@ -2,6 +2,7 @@ name: Firmverse
 
 on:
   push:
+    branches: [main]
     paths:
       - Cargo.toml
       - Cargo.lock
@@ -17,8 +18,14 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest automatic verification for each ref.
+concurrency:
+  group: firmverse-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   virtual-hardware:
+    timeout-minutes: 20
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -87,6 +94,7 @@ jobs:
       - name: Upload execution evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          retention-days: 3
           name: firmverse-wallet-report
           path: reports/firmverse
           if-no-files-found: error

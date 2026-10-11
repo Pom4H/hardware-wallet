@@ -2,6 +2,7 @@ name: Chain integration
 
 on:
   push:
+    branches: [main]
     paths:
       - .github/workflows/chains.yml
       - rust-toolchain.toml
@@ -30,8 +31,14 @@ on:
 permissions:
   contents: read
 
+# Keep only the newest automatic verification for each ref.
+concurrency:
+  group: chains-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   chain:
+    timeout-minutes: 20
     runs-on: [self-hosted, Linux, X64]
     strategy:
       fail-fast: false
